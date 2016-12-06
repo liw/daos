@@ -41,6 +41,7 @@
 #include <daos_srv/container.h>
 
 #include <daos/rpc.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
 #include "rpc.h"
@@ -479,45 +480,69 @@ ds_cont_tgt_open_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
-/* Close a single record (i.e., handle). */
+/* Close a single record (i.e., handle). "vpool_hdl" may be DAOS_HDL_INVAL. */
 static int
-cont_close_one_rec(struct cont_tgt_close_rec *rec)
+cont_close_one_rec(const uuid_t pool_uuid, daos_handle_t vpool_backup_hdl,
+		   struct cont_tgt_close_rec *rec)
 {
 	struct dsm_tls	       *tls = dsm_tls_get();
 	struct ds_cont_hdl     *hdl;
+	daos_handle_t		vcont_hdl;
 	daos_epoch_range_t	range;
 	int			rc;
 
+	D_DEBUG(DF_DSMS, DF_CONT": closing: hdl="DF_UUID" hce="DF_U64"\n",
+		DP_CONT(pool_uuid, rec->tcr_uuid), DP_UUID(rec->tcr_hdl),
+		rec->tcr_hce);
+
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
 	if (hdl == NULL) {
-		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID" hce="
-			DF_U64"\n", DP_CONT(NULL, NULL), DP_UUID(rec->tcr_hdl),
-			rec->tcr_hce);
-		return 0;
-	}
+		struct ds_pool_child   *pool_child;
+		daos_handle_t		vpool_hdl;
 
-	D_DEBUG(DF_DSMS, DF_CONT": closing: hdl="DF_UUID" hce="DF_U64"\n",
-		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
-		DP_UUID(rec->tcr_hdl), rec->tcr_hce);
+		D_DEBUG(DF_DSMS, DF_CONT": hdl already closed: hdl="DF_UUID"\n",
+			DP_CONT(pool_uuid, rec->tcr_uuid),
+			DP_UUID(rec->tcr_hdl));
+		/* Try to opening the vos container. */
+		pool_child = ds_pool_child_lookup(pool_uuid);
+		if (pool_child == NULL) {
+			D_DEBUG(DF_DSMS, DF_CONT": no pool child either\n",
+				DP_CONT(pool_uuid, rec->tcr_uuid));
+			/* Use the backup vos pool handle. */
+			vpool_hdl = vpool_backup_hdl;
+		} else {
+			vpool_hdl = pool_child->spc_hdl;
+		}
+		rc = vos_co_open(vpool_hdl, rec->tcr_uuid, &vcont_hdl);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to open vos container: %d\n",
+				DP_CONT(pool_uuid, rec->tcr_uuid), rc);
+			D_GOTO(out, rc);
+		}
+	} else {
+		vcont_hdl = hdl->sch_cont->sc_hdl;
+	}
 
 	/* All uncommitted epochs of this handle. */
 	range.epr_lo = rec->tcr_hce + 1;
 	range.epr_hi = DAOS_EPOCH_MAX;
 
-	rc = vos_epoch_discard(hdl->sch_cont->sc_hdl, &range, rec->tcr_hdl);
+	rc = vos_epoch_discard(vcont_hdl, &range, rec->tcr_hdl);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to discard uncommitted epochs ["DF_U64
 			", "DF_X64"): hdl="DF_UUID" rc=%d\n",
-			DP_CONT(hdl->sch_pool->spc_uuid,
-				hdl->sch_cont->sc_uuid), range.epr_lo,
+			DP_CONT(pool_uuid, rec->tcr_uuid), range.epr_lo,
 			range.epr_hi, DP_UUID(rec->tcr_hdl), rc);
-		D_GOTO(out, rc);
+		D_GOTO(out_hdl, rc);
 	}
 
-	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+	if (hdl != NULL)
+		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 
+out_hdl:
+	if (hdl != NULL)
+		cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 out:
-	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return rc;
 }
 
@@ -526,18 +551,53 @@ static int
 cont_close_one(void *vin)
 {
 	struct cont_tgt_close_in       *in = vin;
+	struct dss_module_info	       *info = dss_get_module_info();
+	char			       *path;
+	daos_handle_t			vpool_hdl = DAOS_HDL_INVAL;
 	struct cont_tgt_close_rec      *recs = in->tci_recs.da_arrays;
 	int				i;
-	int				rc = 0;
+	int				rc_tmp;
+	int				rc;
 
+	/*
+	 * We want to try discarding uncommitted epochs even if corresponding
+	 * ds_cont_hdl objects cannot be found (e.g., after a server restart).
+	 * Since all recs belong to the same pool, we obtain a backup vos pool
+	 * handle for cont_close_one_rec() to use when it fails to find any
+	 * ds_cont_hdl objects.
+	 */
+	rc = ds_mgmt_tgt_file(in->tci_pool_uuid, VOS_FILE, &info->dmi_tid,
+			      &path);
+	if (rc != 0) {
+		D_DEBUG(DF_DSMS, DF_CONT": failed to get vos pool path: %d\n",
+			DP_CONT(in->tci_pool_uuid, NULL), rc);
+		D_GOTO(close, rc = 0);
+	}
+	rc = vos_pool_open(path, in->tci_pool_uuid, &vpool_hdl);
+	free(path);
+	if (rc != 0) {
+		D_DEBUG(DF_DSMS, DF_CONT": failed to open vos pool: %d\n",
+			DP_CONT(in->tci_pool_uuid, NULL), rc);
+		rc = 0;
+	}
+
+close:
 	for (i = 0; i < in->tci_recs.da_count; i++) {
-		int rc_tmp;
-
-		rc_tmp = cont_close_one_rec(&recs[i]);
+		rc_tmp = cont_close_one_rec(in->tci_pool_uuid, vpool_hdl,
+					    &recs[i]);
 		if (rc_tmp != 0 && rc == 0)
 			rc = rc_tmp;
 	}
 
+	if (!daos_handle_is_inval(vpool_hdl)) {
+		rc_tmp = vos_pool_close(vpool_hdl);
+		if (rc_tmp != 0) {
+			D_ERROR(DF_CONT": failed to close vos pool: %d\n",
+				DP_CONT(in->tci_pool_uuid, NULL), rc_tmp);
+			if (rc == 0)
+				rc = rc_tmp;
+		}
+	}
 	return rc;
 }
 
@@ -555,10 +615,11 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 	if (in->tci_recs.da_arrays == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: recs[0].hdl="DF_UUID
-		"recs[0].hce="DF_U64" nres="DF_U64"\n", DP_CONT(NULL, NULL),
-		rpc, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce,
-		in->tci_recs.da_count);
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: recs[0].uuid="DF_UUID
+		" recs[0].hdl="DF_UUID" recs[0].hce="DF_U64" nrecs="DF_U64"\n",
+		DP_CONT(in->tci_pool_uuid, NULL), rpc,
+		DP_UUID(recs[0].tcr_uuid), DP_UUID(recs[0].tcr_hdl),
+		recs[0].tcr_hce, in->tci_recs.da_count);
 
 	rc = dss_collective(cont_close_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
@@ -566,7 +627,7 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
-		DP_CONT(NULL, NULL), rpc, out->tco_rc, rc);
+		DP_CONT(in->tci_pool_uuid, NULL), rpc, out->tco_rc, rc);
 	return crt_reply_send(rpc);
 }
 

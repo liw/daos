@@ -149,11 +149,13 @@ struct cont_tgt_open_out {
 };
 
 struct cont_tgt_close_rec {
+	uuid_t		tcr_uuid;	/* container UUID */
 	uuid_t		tcr_hdl;
 	daos_epoch_t	tcr_hce;
 };
 
 struct cont_tgt_close_in {
+	uuid_t			tci_pool_uuid;
 	struct crt_array	tci_recs;	/* cont_tgt_close_rec[] */
 };
 

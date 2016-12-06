@@ -595,16 +595,17 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 	crt_rpc_t		       *rpc;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": bcasting: recs[0].hdl="DF_UUID
-		" recs[0].hce="DF_U64" nrecs=%d\n",
-		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
-		recs[0].tcr_hce, nrecs);
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting: recs[0].uuid="DF_UUID
+		" recs[0].hdl="DF_UUID" recs[0].hce="DF_U64" nrecs=%d\n",
+		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_uuid),
+		DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce, nrecs);
 
 	rc = ds_cont_bcast_create(ctx, svc, CONT_TGT_CLOSE, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	in = crt_req_get(rpc);
+	uuid_copy(in->tci_pool_uuid, svc->cs_pool_uuid);
 	in->tci_recs.da_arrays = recs;
 	in->tci_recs.da_count = nrecs;
 
@@ -642,9 +643,11 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	D_ASSERTF(nrecs > 0, "%d\n", nrecs);
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
-	D_DEBUG(DF_DSMS, DF_CONT": closing %d recs: recs[0].hdl="DF_UUID
-		" recs[0].hce="DF_U64"\n", DP_CONT(svc->cs_pool_uuid, NULL),
-		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
+	D_DEBUG(DF_DSMS, DF_CONT": closing %d recs: recs[0].uuid="DF_UUID
+		" recs[0].hdl="DF_UUID" recs[0].hce="DF_U64"\n",
+		DP_CONT(svc->cs_pool_uuid, NULL), nrecs,
+		DP_UUID(recs[0].tcr_uuid), DP_UUID(recs[0].tcr_hdl),
+		recs[0].tcr_hce);
 
 	rc = cont_close_bcast(ctx, svc, recs, nrecs);
 	if (rc != 0)
@@ -717,6 +720,7 @@ cont_close(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
+	uuid_copy(rec.tcr_uuid, in->cci_op.ci_uuid);
 	uuid_copy(rec.tcr_hdl, in->cci_op.ci_hdl);
 	rec.tcr_hce = chdl.ch_hce;
 
@@ -788,6 +792,7 @@ close_iter_cb(daos_iov_t *key, daos_iov_t *val, void *varg)
 		arg->cia_recs_size = recs_size_tmp;
 	}
 
+	uuid_copy(arg->cia_recs[arg->cia_nrecs].tcr_uuid, hdl->ch_cont);
 	uuid_copy(arg->cia_recs[arg->cia_nrecs].tcr_hdl, key->iov_buf);
 	arg->cia_recs[arg->cia_nrecs].tcr_hce = hdl->ch_hce;
 	arg->cia_nrecs++;

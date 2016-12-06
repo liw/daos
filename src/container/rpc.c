@@ -33,6 +33,10 @@ proc_cont_tgt_close_rec(crt_proc_t proc, struct cont_tgt_close_rec *rec)
 {
 	int rc;
 
+	rc = crt_proc_uuid_t(proc, &rec->tcr_uuid);
+	if (rc != 0)
+		return -DER_CRT_HG;
+
 	rc = crt_proc_uuid_t(proc, &rec->tcr_hdl);
 	if (rc != 0)
 		return -DER_CRT_HG;
@@ -131,6 +135,7 @@ struct crt_msg_field *cont_tgt_open_out_fields[] = {
 };
 
 struct crt_msg_field *cont_tgt_close_in_fields[] = {
+	&CMF_UUID,	/* pool_uuid */
 	&DMF_CLOSE_RECS	/* recs */
 };
 
