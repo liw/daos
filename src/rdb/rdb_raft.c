@@ -263,6 +263,8 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	 * by the log module in raft. buf is freed in rdb_raft_cb_log_delete().
 	 */
 	entry->data.buf = buf->dre_bytes;
+	D_DEBUG(DB_MD, DF_DB": allocated entry "DF_U64" %p[%zu]\n", DP_DB(db),
+		i, buf, buf_size);
 	return 0;
 }
 
@@ -772,6 +774,30 @@ rdb_raft_init(daos_handle_t rdb_attr)
 			       NULL /* child */);
 }
 
+/* Free the rdb_raft_entry buffers without deleting the persistent entries. */
+static void
+rdb_raft_log_free(raft_server_t *raft)
+{
+	uint64_t	current = raft_get_current_idx(raft);
+	uint64_t	count = raft_get_log_count(raft);
+	uint64_t	i;
+
+	/* From the newest (current) to the oldest (current - count + 1). */
+	for (i = current; i > current - count; i--) {
+		raft_entry_t	       *entry;
+		struct rdb_raft_entry  *buf;
+		size_t			buf_size;
+
+		entry = raft_get_entry_from_idx(raft, i);
+		D_ASSERT(entry != NULL);
+		buf = rdb_raft_entry_buf(entry);
+		buf_size = rdb_raft_entry_buf_size(entry);
+		D_DEBUG(DB_MD, "freeing entry "DF_U64" %p[%zu]\n", i, buf,
+			buf_size);
+		D_FREE(buf, buf_size);
+	}
+}
+
 /* Load an entry. */
 static int
 rdb_raft_log_load_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
@@ -779,35 +805,31 @@ rdb_raft_log_load_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
 {
 	raft_server_t	       *raft = varg;
 	struct rdb_raft_entry  *buf = val->iov_buf;
-	size_t			buf_size;
 	raft_entry_t		entry;
 	int			rc;
 
-	/* Read the header. */
-	if (key->iov_len != sizeof(uint64_t) ||
-	    val->iov_len < sizeof(*buf))
+	if (key->iov_len != sizeof(uint64_t)) {
+		D_ERROR("invalid key size: "DF_U64"\n", key->iov_len);
 		return -DER_IO;
+	}
+	if (val->iov_len < sizeof(*buf)) {
+		D_ERROR("value size < header size: "DF_U64"\n", val->iov_len);
+		return -DER_IO;
+	}
+	if (val->iov_len != sizeof(*buf) + buf->dre_size) {
+		D_ERROR("invalid value size: value="DF_U64" data=%u\n",
+			val->iov_len, buf->dre_size);
+		return -DER_IO;
+	}
+
 	entry.term = buf->dre_term;
 	entry.id = buf->dre_id;
 	entry.type = buf->dre_type;
+	entry.data.buf = buf->dre_bytes;
 	entry.data.len = buf->dre_size;
-
-	/* Prepare the buffer and read the bytes. */
-	/* TODO: No chance to free this buffer during raft_clear()! */
-	buf_size = rdb_raft_entry_buf_size(&entry);
-	if (val->iov_len != buf_size)
-		return -DER_IO;
-	D_ALLOC(entry.data.buf, buf_size);
-	if (entry.data.buf == NULL)
-		return -DER_NOMEM;
-	memcpy(entry.data.buf, buf, buf_size);
-
 	rc = raft_append_entry(raft, &entry);
-	if (rc != 0) {
-		D_FREE(entry.data.buf, buf_size);
+	if (rc != 0)
 		return -DER_NOMEM;
-	}
-
 	return 0;
 }
 
@@ -815,8 +837,15 @@ rdb_raft_log_load_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
 static int
 rdb_raft_log_load(raft_server_t *raft, daos_handle_t log)
 {
-	return dbtree_iterate(log, 0 /* backward */, rdb_raft_log_load_cb,
-			      raft);
+	int rc;
+
+	rc = dbtree_iterate(log, 0 /* backward */, rdb_raft_log_load_cb, raft);
+	if (rc != 0) {
+		D_ERROR("failed to load log: %d\n", rc);
+		rdb_raft_log_free(raft);
+		return rc;
+	}
+	return 0;
 }
 
 static int
@@ -1018,6 +1047,7 @@ err_nodes:
 		raft_remove_node(db->d_raft, node);
 		D_FREE_PTR(n);
 	}
+	rdb_raft_log_free(db->d_raft);
 err_log:
 	dbtree_close(db->d_log);
 err_raft:
@@ -1097,6 +1127,7 @@ rdb_raft_stop(struct rdb *db)
 		raft_remove_node(db->d_raft, node);
 		D_FREE_PTR(n);
 	}
+	rdb_raft_log_free(db->d_raft);
 	raft_free(db->d_raft);
 
 	/* Free the rest. */
