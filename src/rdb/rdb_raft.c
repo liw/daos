@@ -719,28 +719,31 @@ rdb_raft_rand(void)
 	return (double)rand() / RAND_MAX;
 }
 
+#define RDB_RAFT_BEAT_PERIOD 1000 /* ms */
+
 /* Daemon ULT for raft_periodic() */
 static void
 rdb_timerd(void *arg)
 {
 	struct rdb     *db = arg;
-	const double	d_min = 0.5;	/* min duration between beats (s) */
-	const double	d_max = 1;	/* max duration between beats (s) */
-	double		d = 0;		/* duration till next beat (s) */
+	double		d_min;		/* min duration between beats (s) */
+	double		d_max;		/* max duration between beats (s) */
+	double		d;		/* duration till next beat (s) */
+	double		d_prev;		/* duration since previous beat (s) */
 	double		t;		/* timestamp of beat (s) */
 	double		t_prev;		/* timestamp of previous beat (s) */
 	int		rc;
 
-	D_DEBUG(DB_ANY, DF_DB": timerd starting\n", DP_DB(db));
+	d_max = (double)RDB_RAFT_BEAT_PERIOD / 1000 /* ms */;
+	d_min = d_max / 2;
+	/* Hack away the initial election timeout wait, to some extent. */
+	d_prev = (double)(raft_get_election_timeout(db->d_raft) -
+			  RDB_RAFT_BEAT_PERIOD) / 1000.0 /* ms */;
+	D_DEBUG(DB_MD, DF_DB": timerd starting: d_min=%f d_max=%f d_prev=%f\n",
+		DP_DB(db), d_min, d_max, d_prev);
 	t = ABT_get_wtime();
-	t_prev = t;
 	do {
 		struct rdb_raft_state	state;
-		double			d_prev = t - t_prev;
-
-		if (d_prev - d > 1 /* s */)
-			D_WARN(DF_DB": not scheduled for %f second\n",
-			       DP_DB(db), d_prev - d);
 
 		rdb_raft_save_state(db, &state);
 		rc = raft_periodic(db->d_raft, d_prev * 1000 /* ms */);
@@ -752,8 +755,12 @@ rdb_timerd(void *arg)
 		d = d_min + (d_max - d_min) * rdb_raft_rand();
 		while ((t = ABT_get_wtime()) < t_prev + d && !db->d_stop)
 			ABT_thread_yield();
+		d_prev = t - t_prev;
+		if (d_prev - d > 1 /* s */)
+			D_WARN(DF_DB": not scheduled for %f second\n",
+			       DP_DB(db), d_prev - d);
 	} while (!db->d_stop);
-	D_DEBUG(DB_ANY, DF_DB": timerd stopping\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB": timerd stopping\n", DP_DB(db));
 }
 
 int
@@ -954,6 +961,16 @@ rdb_raft_start(struct rdb *db)
 		election_timeout);
 	D_DEBUG(DB_ANY, DF_DB": request timeout %d ms\n", DP_DB(db),
 		request_timeout);
+	if (request_timeout < RDB_RAFT_BEAT_PERIOD) {
+		D_ERROR(DF_DB": election timeout must >= %d ms\n", DP_DB(db),
+			RDB_RAFT_BEAT_PERIOD);
+		D_GOTO(err_nodes, rc = -DER_INVAL);
+	}
+	if (election_timeout < request_timeout) {
+		D_ERROR(DF_DB": election timeout must > request timeout\n",
+			DP_DB(db));
+		D_GOTO(err_nodes, rc = -DER_INVAL);
+	}
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
 
