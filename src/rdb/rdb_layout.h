@@ -39,7 +39,7 @@
 /* For pmemobj_create() and pmemobj_open() */
 #define RDB_LAYOUT "rdb_layout"
 
-/* rdb_superblock::dsb_magic */
+/* rdb_sb::dsb_magic */
 #define RDB_SB_MAGIC 0x8120da0367913ef9
 
 /* Superblock */

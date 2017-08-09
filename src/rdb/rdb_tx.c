@@ -580,8 +580,8 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	daos_iov_t	value;
 	volatile int	rc;
 
-	D_DEBUG(DB_ANY, DF_DB": applying entry "DF_U64": buf=%p len="DF_U64
-		"\n", DP_DB(db), index, buf, len);
+	D_DEBUG(DB_ANY, DF_DB": applying entry "DF_U64": buf=%p len="DF_U64"\n",
+		DP_DB(db), index, buf, len);
 
 	daos_iov_set(&value, &index, sizeof(index));
 

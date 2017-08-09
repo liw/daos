@@ -69,7 +69,7 @@ extern daos_iov_t ds_cont_attr_snapshots;	/* snapshot KVS */
 /*
  * LRE and LHE KVSs (RDB_KVS_INTEGER)
  *
- * A key is an epoch number. A value is an epoch_count. These epoch-sorted
+ * A key is an epoch number. A value is an epoch count. These epoch-sorted
  * KVSs enable us to quickly retrieve the minimum and maximum LREs and LHEs.
  */
 
