@@ -1264,6 +1264,9 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	struct rdb_raft_state		state;
 	int				rc;
 
+	D_DEBUG(DB_ANY, DF_UUID": received raft rv rpc %p from rank %u\n",
+		DP_UUID(in->rvi_op.ri_uuid), rpc, rpc->cr_ep.ep_rank);
+
 	db = rdb_lookup(in->rvi_op.ri_uuid);
 	if (db == NULL)
 		D__GOTO(out, rc = -DER_NONEXIST);
@@ -1291,6 +1294,8 @@ out_db:
 out:
 	out->rvo_op.ro_rc = rc;
 	rc = crt_reply_send(rpc);
+	D_DEBUG(DB_ANY, DF_UUID": sent raft rv reply %p to rank %u: %d\n",
+		DP_UUID(in->rvi_op.ri_uuid), rpc, rpc->cr_ep.ep_rank, rc);
 	if (rc != 0)
 		D__ERROR(DF_UUID": failed to send REQUESTVOTE reply to rank %u: "
 			"%d\n", DP_UUID(in->rvi_op.ri_uuid), rpc->cr_ep.ep_rank,
@@ -1306,6 +1311,9 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	raft_node_t		       *node;
 	struct rdb_raft_state		state;
 	int				rc;
+
+	D_DEBUG(DB_ANY, DF_UUID": received raft ae rpc %p from rank %u\n",
+		DP_UUID(in->aei_op.ri_uuid), rpc, rpc->cr_ep.ep_rank);
 
 	db = rdb_lookup(in->aei_op.ri_uuid);
 	if (db == NULL)
@@ -1334,6 +1342,8 @@ out_db:
 out:
 	out->aeo_op.ro_rc = rc;
 	rc = crt_reply_send(rpc);
+	D_DEBUG(DB_ANY, DF_UUID": sent raft ae reply %p to rank %u: %d\n",
+		DP_UUID(in->aei_op.ri_uuid), rpc, rpc->cr_ep.ep_rank, rc);
 	if (rc != 0)
 		D__ERROR(DF_UUID": failed to send APPENDENTRIES reply to rank "
 			"%u: %d\n", DP_UUID(in->aei_op.ri_uuid),

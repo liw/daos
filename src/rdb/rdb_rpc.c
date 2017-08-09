@@ -343,8 +343,9 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	crt_opcode_t		opc = opc_get(cb_info->cci_rpc->cr_opc);
 	int			rc = cb_info->cci_rc;
 
-	D__DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
-		rrpc->drc_rpc->cr_ep.ep_rank, ABT_get_wtime() - rrpc->drc_sent);
+	D__DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f rc=%d\n", DP_DB(db), opc,
+		rrpc->drc_rpc->cr_ep.ep_rank, ABT_get_wtime() - rrpc->drc_sent,
+		rc);
 	ABT_mutex_lock(db->d_mutex);
 	if (rc != 0 || db->d_stop) {
 		if (rc != -DER_CANCELED)
@@ -400,6 +401,8 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node)
 
 	rc = crt_req_send(rpc, rdb_raft_rpc_cb, rrpc);
 	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_DEBUG(DB_MD, DF_DB": opc=%u rank=%u sent=%f\n",
+		DP_DB(db), rpc->cr_opc, rpc->cr_ep.ep_rank, rrpc->drc_sent);
 	return 0;
 }
 
