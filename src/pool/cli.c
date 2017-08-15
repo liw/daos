@@ -1062,6 +1062,11 @@ dc_pool_update_internal(struct daos_task *task, daos_pool_update_t *args,
 	in = crt_req_get(rpc);
 	uuid_copy(in->pti_op.pi_uuid, args->uuid);
 	in->pti_targets = args->tgts;
+	char *s = getenv("DAOS_POOL_EXCLUDE_PING");
+	if (s != NULL)
+		in->pti_rank = atoi(s);
+	else
+		in->pti_rank = -1;
 
 	crt_req_addref(rpc);
 

@@ -99,7 +99,8 @@ struct crt_msg_field *pool_query_out_fields[] = {
 struct crt_msg_field *pool_tgt_update_in_fields[] = {
 	&CMF_UUID,	/* op.uuid */
 	&CMF_UUID,	/* op.handle */
-	&CMF_RANK_LIST	/* targets */
+	&CMF_RANK_LIST,	/* targets */
+	&CMF_UINT32	/* rank */
 };
 
 struct crt_msg_field *pool_tgt_update_out_fields[] = {

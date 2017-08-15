@@ -1937,6 +1937,16 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	bool				updated;
 	int				rc;
 
+	if (in->pti_rank != -1) {
+		D_DEBUG(DF_DSMS, DF_UUID": pinging rank %u (unimplemented)\n",
+			DP_UUID(in->pti_op.pi_uuid), in->pti_rank);
+		out->pto_op.po_rc = -DER_UNKNOWN;
+		rc = crt_reply_send(rpc);
+		D_DEBUG(DF_DSMS, DF_UUID": replied rpc %p: %d\n",
+			DP_UUID(in->pti_op.pi_uuid), rpc, rc);
+		return;
+	}
+
 	if (in->pti_targets == NULL || in->pti_targets->rl_nr.num == 0 ||
 	    in->pti_targets->rl_ranks == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
