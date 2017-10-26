@@ -177,6 +177,10 @@ struct dss_module {
 	int			(*sm_init)(void);
 	/* Teardown function, invoked just before module unload */
 	int			(*sm_fini)(void);
+	/* ES setup function, invoked for each ES */
+	int			(*sm_xstream_init)(void);
+	/* ES teardown function, invoked for each ES */
+	int			(*sm_xstream_fini)(void);
 	/* Array of RPC definition for request sent by client nodes, last entry
 	 * of the array must be empty */
 	struct daos_rpc		 *sm_cl_rpcs;

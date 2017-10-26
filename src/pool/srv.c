@@ -31,6 +31,7 @@
 #include <daos_srv/pool.h>
 
 #include <daos/rpc.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -73,6 +74,74 @@ fini(void)
 	ds_pool_cache_fini();
 	ds_pool_svc_hash_fini();
 	ds_pool_iv_fini();
+	return 0;
+}
+
+/*
+ * Try to start a pool's pool service if its RDB exists. Continue the iteration
+ * upon errors as other pools may still be able to work.
+ */
+static int
+start_pool_svc(const uuid_t uuid, void *arg)
+{
+	char   *path;
+	int	rc;
+
+	/*
+	 * Check if an RDB file exists and we can access it, to avoid
+	 * unnecessary error messages from the ds_pool_svc_start() call.
+	 */
+	path = ds_pool_rdb_path(uuid, uuid);
+	if (path == NULL) {
+		D_ERROR(DF_UUID": failed allocate rdb path\n", DP_UUID(uuid));
+		return 0;
+	}
+	rc = access(path, R_OK | W_OK);
+	free(path);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID": cannot find or access rdb: %d\n",
+			DP_UUID(uuid), errno);
+		return 0;
+	}
+
+	rc = ds_pool_svc_start(uuid);
+	if (rc != 0) {
+		D_ERROR("not starting pool service "DF_UUID": %d\n",
+			DP_UUID(uuid), rc);
+		return 0;
+	}
+
+	D_DEBUG(DB_MD, "started pool service "DF_UUID"\n", DP_UUID(uuid));
+	return 0;
+}
+
+static int
+xstream_init(void)
+{
+	struct dss_module_info *info = dss_get_module_info();
+	int			rc;
+
+	if (info->dmi_tid != 0)
+		return 0;
+
+	/* Scan the storage and start all pool services. */
+	rc = ds_mgmt_tgt_pool_iterate(start_pool_svc, NULL /* arg */);
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
+
+static int
+xstream_fini(void)
+{
+	struct dss_module_info *info = dss_get_module_info();
+
+	if (info->dmi_tid != 0)
+		return 0;
+
+	/* TODO: Stop all pool services. */
+
 	return 0;
 }
 
@@ -161,13 +230,15 @@ struct dss_module_key pool_module_key = {
 };
 
 struct dss_module pool_module =  {
-	.sm_name	= "pool",
-	.sm_mod_id	= DAOS_POOL_MODULE,
-	.sm_ver		= 1,
-	.sm_init	= init,
-	.sm_fini	= fini,
-	.sm_cl_rpcs	= pool_rpcs,
-	.sm_srv_rpcs	= pool_srv_rpcs,
-	.sm_handlers	= pool_handlers,
-	.sm_key		= &pool_module_key,
+	.sm_name		= "pool",
+	.sm_mod_id		= DAOS_POOL_MODULE,
+	.sm_ver			= 1,
+	.sm_init		= init,
+	.sm_fini		= fini,
+	.sm_xstream_init	= xstream_init,
+	.sm_xstream_fini	= xstream_fini,
+	.sm_cl_rpcs		= pool_rpcs,
+	.sm_srv_rpcs		= pool_srv_rpcs,
+	.sm_handlers		= pool_handlers,
+	.sm_key			= &pool_module_key,
 };

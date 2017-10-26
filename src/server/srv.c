@@ -241,12 +241,17 @@ dss_srv_handler(void *arg)
 	/* Prepare the scheduler */
 	rc = tse_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
 	if (rc != 0) {
-		D__ERROR("failed to init the seduler\n");
+		D__ERROR("failed to init the scheduler\n");
 		D__GOTO(destroy, rc);
 	}
 
 	dx->dx_idx = dmi->dmi_tid;
 	dmi->dmi_xstream = dx;
+
+	rc = dss_module_xstream_init();
+	if (rc != 0)
+		D_GOTO(fini, rc);
+
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creater */
 	D__ASSERT(!xstream_data.xd_ult_signal);
@@ -265,10 +270,11 @@ dss_srv_handler(void *arg)
 	if (rc != 0)
 		D__ERROR("failed to progress network context: %d\n", rc);
 
+	dss_module_xstream_fini();
+fini:
 	tse_sched_fini(&dmi->dmi_sched);
 destroy:
 	crt_context_destroy(dmi->dmi_ctx, true);
-
 }
 
 static inline struct dss_xstream *
