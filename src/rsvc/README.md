@@ -24,7 +24,7 @@ A replicated service is implemented using a stack of modules:
 
 `mgmt_svc`, `pool_svc`, and `cont_svc` implement the request handlers and the leadership change event handlers of the respective services. They define their respective service state in terms of the RDB data model provided by `rdb`, implement state queries and updates using RDB transactions, and register their leadership change event handlers into the framework `rsvc` offers.
 
-`rdb` (`daos_srv/rdb`) implements a hierarchical key-value store data model with transactions, replicated using Raft. It delivers Raft leadership change events to `ds_rsvc`, implements transactions using the Raft log, and store its data model as well as internal metadata using the VOS data model.
+`rdb` (`daos_srv/rdb.h`) implements a hierarchical key-value store data model with transactions, replicated using Raft. It delivers Raft leadership change events to `ds_rsvc`, implements transactions using the Raft log, and store its data model as well as internal metadata using the VOS data model.
 
 `raft` (`rdb/raft/include/raft.h`) implements the Raft core protocol in a library. Its integration with VOS and CaRT is done inside `rdb`.
 

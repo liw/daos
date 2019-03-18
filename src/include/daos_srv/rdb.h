@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2017-2018 Intel Corporation.
+/*
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,17 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * rdb: Replicated Database
  *
  * An RDB database comprises a hierarchy of key-value stores (KVSs), much like
- * how a file system comprises a hierarchy of directories. A key-value pair
- * (KV) in a (parent) KVS may be another (child) KVS. A KVS is therefore
- * identified by a path, which is the list of keys leading from the root KVS to
- * the key whose value is the KVS in question. A newly-created database is
- * empty; to store data, callers must first create the root KVS.
+ * how a file system comprises a hierarchy of directories. The value of a
+ * key-value pair (KV) in a (parent) KVS may be another (child) KVS. A KVS is
+ * therefore identified by a path (see rdb_path_t), which is the list of keys
+ * leading from the root KVS (see rdb_path_root_key) to the key whose value is
+ * the KVS in question. A newly created database is empty; to store data,
+ * callers must create the root KVS first.
  *
  * Each KVS belongs to one of the predefined KVS classes (see rdb_kvs_class).
  * Each value is a nonempty byte stream or a child KVS (see above).
@@ -66,31 +69,25 @@
  *   - paths
  *   - transactions
  *
- * And a few distributed helper methods, rdb_dist_*, makes certain distributed
- * tasks easier.
- *
- * All access to the KVSs in a database employ transactions (TX). Ending a TX
- * without committing it discards all its updates. Ending a query-only TX
- * without committing is fine at the moment.
+ * All access to the KVSs in a database must employ transactions (TXs). Ending
+ * a TX without committing it discards all its updates. A query-only TX does
+ * not need to be committed.
  *
  * A query sees all (conflicting) updates committed (successfully) before its
- * rdb_tx_begin(). It may or may not see updates committed after its
- * rdb_tx_begin(). And, it currently does not see uncommitted updates, even
- * those in the same TX.
+ * TX begins. It may or may not see updates committed after that. More
+ * importantly, it currently does not see uncommitted updates, even those in
+ * the same TX.
  *
- * Updates in a TX are queued, not revealed to queries, until rdb_tx_commit().
- * They are applied sequentially. If one update fails to apply, then the TX is
- * aborted (i.e., all applied updates in the TX are rolled back), and
- * rdb_tx_commit() returns the error.
+ * Updates in a TX are buffered, not revealed to queries, until the TX commits
+ * successfully. They are applied sequentially. If one fails to apply, then the
+ * TX is aborted (i.e., all applied updates in the TX are rolled back), and
+ * rdb_tx_commit returns the error.
  *
- * If a TX destroys a KVS, then it must first destroy any child KVSs.
+ * If a TX destroys a KVS, it must first destroy any child KVSs.
  *
- * If a TX does not include any updates, then rdb_tx_commit() will be a no-op
- * and is not required.
- *
- * Currently, a database can be accessed by only one ES. This is to take
- * advantage of Argobots's non-preemptive scheduling in order to simplify the
- * locking inside rdb.
+ * A database can be accessed by only one xstream. This is to take advantage of
+ * Argobots's non-preemptive scheduling in order to simplify the locking inside
+ * rdb.
  *
  * Caller locking rules:
  *
@@ -149,7 +146,6 @@ struct rdb_cbs {
 };
 
 /** Database methods */
-void rdb_get_uuid(struct rdb *db, uuid_t uuid);
 int rdb_create(const char *path, const uuid_t uuid, size_t size,
 	       const d_rank_list_t *replicas);
 int rdb_destroy(const char *path, const uuid_t uuid);
@@ -160,6 +156,7 @@ void rdb_resign(struct rdb *db, uint64_t term);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
+void rdb_get_uuid(struct rdb *db, uuid_t uuid);
 int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 

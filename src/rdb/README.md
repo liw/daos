@@ -1,20 +1,8 @@
-# Service Replication
+# Replicated Databases
 
-Pool and container services are made highly available by replicating their stateâpool and container metadataâusing Raft-based consensus and strong leadership. A service replicated in this generic approach tolerates the failure of any minority of its replicas. By spreading replicas of each service across the fault domains, pool and container services can therefore tolerate a reasonable number of target failures.
+Module `rdb` implements replicated databases used by `ds_rsvc` to store persistent state and interact with Raft leadership events. See [`rsvc` README](../rsvc/README.md) for an introduction.
 
-<a id="8.3.1"></a>
-## Architecture
-
-A replicated service is built around a Raft replicated log. The service transforms RPCs into state queries and deterministic state updates. All state updates are committed to the replicated log first, before being applied by any of the service replicas. Since Raft guarantees consistency among log replicas, the service replicas end up applying the same set of state updates in the same order and go through identical state histories.
-
-Among all replicas of a replicated service, only the current leader can handle service RPCs. The leader of a service is the current Raft leader (i.e., a Raft leader with the highest term number at the moment). Non-leader replicas reject all service RPCs and try to redirect the clients to the current leader to the best of their knowledge. Clients cache the addresses of the replicas as well as who current leader is. Occasionally, a client may not get any meaningful redirection hints and can find current leader by communicating to a random replicas.
-
-The <a href="#f8.1">figure</a> below shows the modules constituting a service replica. The service module handles RPCs by transforming them into state queries and deterministic state updates. The Raft module implements the replicated log following the Raft protocol, by communicating with Raft modules on other replicas. It provides methods for the service module to perform the queries and the updates. The storage module, which in this case is the persistent memory and the file system, stores the service and Raft state. It uses the NVM library to update the state stored in persistent memory atomically.
-
-<a id="f8.1"></a>
-**Service replication modules**
-
-![../../doc/graph/Fig_041.png](../../doc/graph/Fig_041.png "Service replication modules")
+For usage, see `daos_srv/rdb.h`.
 
 <a id="8.3.2"></a>
 ## RPC Handling
