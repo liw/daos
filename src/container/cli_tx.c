@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2018 Intel Corporation.
+/*
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,13 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * dc_tx: Transaction Client
  *
  * This module is part of libdaos. It implements the transaction DAOS API.
  */
+
 #define D_LOGFAC	DD_FAC(container)
 
 #include <daos/container.h>
@@ -53,13 +56,15 @@ enum {
 	TX_RDONLY,
 };
 
-/* Client transaction handle */
+/** Client transaction handle */
 struct dc_tx {
 	/** link chain in the global handle hash table */
 	struct d_hlink		tx_hlink;
 	/** unique uuid for this transaction */
 	uuid_t			tx_uuid;
-	/** timestamp/epoch associated with transaction handle */
+	/** original epoch (immutable once determined) */
+	daos_epoch_t		tx_epoch_orig;
+	/** current epoch */
 	daos_epoch_t		tx_epoch;
 	/** container open handle */
 	daos_handle_t		tx_coh;
@@ -215,10 +220,11 @@ dc_tx_open(tse_task_t *task)
 	if (tx == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	tx->tx_coh	= args->coh;
-	tx->tx_epoch	= crt_hlc_get();
-	tx->tx_status	= TX_OPEN;
-	tx->tx_mode	= TX_RW;
+	tx->tx_coh		= args->coh;
+	tx->tx_epoch		= crt_hlc_get();
+	tx->tx_epoch_orig	= tx->tx_epoch;
+	tx->tx_status		= TX_OPEN;
+	tx->tx_mode		= TX_RW;
 
 	tx_hdl_link(tx);
 	*args->th = tx_ptr2hdl(tx);
@@ -373,6 +379,21 @@ dc_tx_open_snap(tse_task_t *task)
 out:
 	tse_task_complete(task, rc);
 	return rc;
+}
+
+/** Restart th. Shall only be called internally by libdaos with a valid th. */
+void
+dc_tx_restart(daos_handle_t th)
+{
+	struct dc_tx *tx;
+
+	tx = tx_hdl2ptr(th);
+	D_ASSERT(tx != NULL);
+
+	tx->tx_epoch	= crt_hlc_get();
+	tx->tx_status	= TX_OPEN;
+
+	tx_decref(tx);
 }
 
 int

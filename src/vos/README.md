@@ -513,7 +513,7 @@ A read at epoch e follows these rules:
 
     // Epoch uncertainty check
     if e is uncertain
-        if there is any overlapping, unaborted write in (e, e + epsilon]
+        if there is any overlapping, unaborted write in (e, e_orig + epsilon]
             reject
 
     find the highest overlapping, unaborted write in [0, e]
@@ -531,7 +531,7 @@ A write at epoch e follows these rules:
 
     // Epoch uncertainty check
     if e is uncertain
-        if there is any overlapping, unaborted write in (e, e + epsilon]
+        if there is any overlapping, unaborted write in (e, e_orig + epsilon]
             reject
 
     // Read timestamp check
