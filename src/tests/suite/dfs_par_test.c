@@ -578,6 +578,192 @@ dfs_test_hole_mgmt(void **state)
 	D_FREE(rsgl.sg_iovs);
 }
 
+static void
+causality_create(void **state, MPI_Comm comm, int root)
+{
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*file;
+	char		*filename = "causality_testfile";
+	int		size;
+	int		*rcs = NULL;
+	int		rc;
+
+	if (arg->myrank == root) {
+		print_message("Rank %d creates a file for everyone to open\n",
+			      root);
+
+		MPI_Comm_size(comm, &size);
+		D_ALLOC_ARRAY(rcs, size);
+		assert_non_null(rcs);
+	}
+
+	MPI_Barrier(comm);
+
+	if (arg->myrank == root) {
+		rc = dfs_open(dfs_mt, NULL, filename,
+			      S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+		assert_int_equal(rc, 0);
+	}
+
+	MPI_Bcast(&rc, 1, MPI_INT, root, comm);
+
+	if (arg->myrank != root) {
+		rc = dfs_open(dfs_mt, NULL, filename, S_IFREG, O_RDWR, 0, 0,
+			      NULL, &file);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+
+	MPI_Gather(&rc, 1, MPI_INT, rcs, 1, MPI_INT, root, comm);
+
+	if (arg->myrank == root) {
+		rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
+		assert_int_equal(rc, 0);
+
+		D_FREE(rcs);
+	}
+
+	MPI_Barrier(comm);
+}
+
+static void
+causality_mkdir(void **state, MPI_Comm comm, int root)
+{
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*dir;
+	char		*dirname = "causality_testdir";
+	int		size;
+	int		*rcs = NULL;
+	int		rc;
+
+	if (arg->myrank == root) {
+		print_message("Rank %d create a directory for everyone to "
+			      "create files in\n", root);
+
+		MPI_Comm_size(comm, &size);
+		D_ALLOC_ARRAY(rcs, size);
+		assert_non_null(rcs);
+	}
+
+	MPI_Barrier(comm);
+
+	if (arg->myrank == root) {
+		rc = dfs_mkdir(dfs_mt, NULL, dirname, S_IWUSR | S_IRUSR, 0);
+		assert_int_equal(rc, 0);
+	}
+
+	MPI_Bcast(&rc, 1, MPI_INT, root, comm);
+
+	rc = dfs_open(dfs_mt, NULL, dirname, S_IFDIR, O_RDONLY, 0, 0,
+		      NULL, &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	MPI_Gather(&rc, 1, MPI_INT, rcs, 1, MPI_INT, root, comm);
+
+	if (arg->myrank == root) {
+		rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+		assert_int_equal(rc, 0);
+
+		D_FREE(rcs);
+	}
+
+	MPI_Barrier(comm);
+}
+
+static void
+causality_remove(void **state, MPI_Comm comm, int root)
+{
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*file;
+	dfs_obj_t	*dir;
+	char		*filenamebase = "causality_testfile";
+	char		*filename;
+	char		*dirname = "causality_testdir";
+	int		size;
+	int		*rcs = NULL;
+	int		rc;
+
+	if (arg->myrank == root) {
+		print_message("Every rank removes its file in the same "
+			      "directory for rank %d to remove the directory\n",
+			      root);
+
+		MPI_Comm_size(comm, &size);
+		D_ALLOC_ARRAY(rcs, size);
+		assert_non_null(rcs);
+	}
+
+	MPI_Barrier(comm);
+
+	if (arg->myrank == root) {
+		rc = dfs_mkdir(dfs_mt, NULL, dirname, S_IWUSR | S_IRUSR, 0);
+		assert_int_equal(rc, 0);
+	}
+
+	MPI_Bcast(&rc, 1, MPI_INT, root, comm);
+
+	/* Every rank creates a file in the directory. */
+	rc = dfs_open(dfs_mt, NULL, dirname, S_IFDIR, O_RDONLY, 0, 0,
+		      NULL, &dir);
+	assert_int_equal(rc, 0);
+	D_ASPRINTF(filename, "%s-%d", filenamebase, arg->myrank);
+	assert_non_null(filename);
+	rc = dfs_open(dfs_mt, dir, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Sleep a bit so that the epochs assigned to the dfs_remove(dir) call
+	 * below will be higher than those assigned to the dfs_open(file) calls
+	 * above, making this test slightly stricter.
+	 */
+	sleep(1);
+	MPI_Barrier(comm);
+
+	/* Every rank removes its file. */
+	rc = dfs_remove(dfs_mt, dir, filename, true, NULL);
+	assert_int_equal(rc, 0);
+	D_FREE(filename);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	MPI_Gather(&rc, 1, MPI_INT, rcs, 1, MPI_INT, root, comm);
+
+	if (arg->myrank == root) {
+		rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+		assert_int_equal(rc, 0);
+
+		D_FREE(rcs);
+	}
+
+	MPI_Barrier(comm);
+}
+
+static void
+dfs_test_causality(void **state)
+{
+	int	i;
+	int	size;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+	for (i = 0; i < min(size, 16); i++) {
+		causality_create(state, MPI_COMM_WORLD, i);
+		causality_mkdir(state, MPI_COMM_WORLD, i);
+		causality_remove(state, MPI_COMM_WORLD, i);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_par_tests[] = {
 	{ "DFS_PAR_TEST1: Conditional OPs",
 	  dfs_test_cond, async_disable, test_case_teardown},
@@ -587,6 +773,8 @@ static const struct CMUnitTest dfs_par_tests[] = {
 	  dfs_test_ec_short_read, async_disable, test_case_teardown},
 	{ "DFS_PAR_TEST4: DFS hole management",
 	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
+	{ "DFS_PAR_TEST5: DFS causality",
+	  dfs_test_causality, async_disable, test_case_teardown},
 };
 
 static int
