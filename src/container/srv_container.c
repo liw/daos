@@ -200,7 +200,7 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_version, &value);
 	if (rc == -DER_NONEXIST) {
-		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
+		ds_notify_ras_eventf(RAS_CONT_MD_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* jobid */,
 				     &svc->cs_pool_uuid, NULL /* cont */,
@@ -215,7 +215,7 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 		goto out_lock;
 	}
 	if (version < DS_CONT_MD_VERSION_LOW || version > DS_CONT_MD_VERSION) {
-		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
+		ds_notify_ras_eventf(RAS_CONT_MD_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* jobid */,
 				     &svc->cs_pool_uuid, NULL /* cont */,

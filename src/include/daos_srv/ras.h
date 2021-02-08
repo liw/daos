@@ -50,10 +50,10 @@
 	X(RAS_SYSTEM_START,		"system_action_start")		\
 	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")		\
 	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")		\
-	X(RAS_CONT_DF_INCOMPAT,						\
-	  "container_durable_format_incompatible")			\
-	X(RAS_RDB_DF_INCOMPAT,						\
-	  "rdb_durable_format_incompatible")
+	X(RAS_POOL_MD_DF_INCOMPAT,					\
+	  "pool_metadata_durable_format_incompatible")			\
+	X(RAS_CONT_MD_DF_INCOMPAT,					\
+	  "container_metadata_durable_format_incompatible")
 
 /** Define RAS event enum */
 typedef enum {

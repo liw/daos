@@ -1046,7 +1046,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	}
 	version_exists = true;
 	if (version < DS_POOL_MD_VERSION_LOW || version > DS_POOL_MD_VERSION) {
-		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
+		ds_notify_ras_eventf(RAS_POOL_MD_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* jobid */,
 				     &svc->ps_uuid, NULL /* cont */,
@@ -1080,7 +1080,7 @@ check_map:
 	}
 	if (!version_exists) {
 		/* This DB is not new and uses a layout that lacks a version. */
-		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
+		ds_notify_ras_eventf(RAS_POOL_MD_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* jobid */,
 				     &svc->ps_uuid, NULL /* cont */,

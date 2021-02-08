@@ -674,8 +674,11 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 
 	rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc,
 		       &svc->s_db);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == -DER_DF_INCOMPT)
+			raise_df_incompat_event(class, id);
 		goto err_creation;
+	}
 
 	if (create && self_only(replicas) &&
 	    rsvc_class(class)->sc_bootstrap != NULL) {
