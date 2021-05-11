@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       15%{?relval}%{?dist}
+Release:       16%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -84,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel >= 0.7.3
+BuildRequires: daos-raft-devel >= 0.8.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -454,6 +454,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Mon May 17 2021 Li Wei <wei.g.li@intel.com> 1.3.0-16
+- Update raft to pick up Pre-Vote
+
 * Thu May 06 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-15
 - Update to build on EL8
 
