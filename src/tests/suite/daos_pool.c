@@ -10,8 +10,9 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include "daos_test.h"
 #include <daos_security.h>
+#include "daos_test.h"
+#include "daos_iotest.h"
 
 /** connect to non-existing pool */
 static void
@@ -254,6 +255,9 @@ pool_attribute(void **state)
 						};
 	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE, BUFSIZE };
 	size_t			 total_size;
+
+	if (arg->myrank != 0)
+		return;
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -1156,6 +1160,73 @@ label_strings_test(void **state)
 	}
 }
 
+static void
+pool_map_refreshes(void **state)
+{
+	test_arg_t	*arg = *state;
+	d_rank_t	 rank = ranks_to_kill[0];
+	int		 tgt = 0;
+
+	if (arg->rank_size < 2) {
+		print_message("need at least two client ranks\n");
+		skip();
+	}
+
+	if (!test_runable(arg, 2))
+		skip();
+
+	/*
+	 * Since the rebuild_single_pool_target call below refreshes the pool
+	 * map of arg->pool.poh, we must use a separate connection.
+	 */
+	rebuild_single_pool_target(arg, rank, tgt, false);
+
+	if (arg->myrank == 1) {
+		int		 n = 4;
+		daos_obj_id_t	 oids[n];
+		struct ioreq	 reqs[n];
+		const char	*akey = "pmr_akey";
+		const char	*value = "d";
+		daos_size_t	 iod_size = 1;
+		int		 rx_nr = 1;
+		uint64_t	 idx = 0;
+		int		 i;
+
+		for (i = 0; i < n; i++) {
+			oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, i);
+			ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_SINGLE, arg);
+		}
+
+		print_message("rank 1: setting fail_loc DAOS_POOL_FAIL_MAP_REFRESH\n");
+		daos_fail_loc_set(DAOS_POOL_FAIL_MAP_REFRESH | DAOS_FAIL_ONCE);
+
+		print_message("rank 1: invoking concurrent updates to trigger concurrent pool map "
+			      "refreshes\n");
+		for (i = 0; i < n; i++)
+			insert_nowait("pmr_dkey", 1, &akey, &iod_size, &rx_nr, &idx,
+				      (void **)&value, DAOS_TX_NONE, &reqs[i], 0);
+
+		print_message("rank 1: waiting for the updates to complete\n");
+		for (i = 0; i < n; i++)
+			insert_wait(&reqs[i]);
+
+		print_message("rank 1: clearing fail_loc\n");
+		daos_fail_loc_set(0);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("reintegrating the excluded targets\n");
+	reintegrate_single_pool_target(arg, rank, tgt);
+}
+
+static int
+pool_map_refreshes_setup(void **state)
+{
+	async_enable(state);
+	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE, 0, NULL);
+}
+
 static const struct CMUnitTest pool_tests[] = {
 	{ "POOL1: connect to non-existing pool",
 	  pool_connect_nonexist, NULL, test_case_teardown},
@@ -1167,7 +1238,6 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_connect, hdl_share_enable, test_case_teardown},
 	{ "POOL5: exclusive connection",
 	  pool_connect_exclusively, NULL, test_case_teardown},
-	/* Keep this one at the end, as it excludes target rank 1. */
 	{ "POOL6: exclude targets and query pool info",
 	  pool_exclude, async_disable, NULL},
 	{ "POOL7: set/get/list user-defined pool attributes (sync)",
@@ -1188,15 +1258,20 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_connect_access, NULL, test_case_teardown},
 	{ "POOL15: label property string validation",
 	  label_strings_test, NULL, test_case_teardown},
+	{ "POOL16: pool map refreshes",
+	  pool_map_refreshes, pool_map_refreshes_setup, test_case_teardown},
 };
 
 int
-run_daos_pool_test(int rank, int size)
+run_daos_pool_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
-	int rc = 0;
+	int rc;
 
-	rc = cmocka_run_group_tests_name("DAOS_Pool", pool_tests,
-					 setup, test_teardown);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = run_daos_sub_tests("DAOS_Pool", pool_tests, ARRAY_SIZE(pool_tests), sub_tests,
+				sub_tests_size, setup, test_teardown);
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
