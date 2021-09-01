@@ -128,7 +128,7 @@ vos_dth_get(void)
 	struct vos_tls	*tls = vos_tls_get();
 
 	if (tls != NULL)
-		return vos_tls_get()->vtl_dth;
+		return tls->vtl_dth;
 
 	return NULL;
 }
