@@ -827,10 +827,12 @@ unpack_recxs(daos_iod_t *iod, daos_epoch_t **recx_ephs, int *recxs_cap,
 	if (iod->iod_nr + 1 > *recxs_cap) {
 		int cap = *recxs_cap + 32;
 
-		rc = grow_array((void **)&iod->iod_recxs,
-				sizeof(*iod->iod_recxs), *recxs_cap, cap);
-		if (rc != 0)
-			D_GOTO(out, rc);
+		if (type != DAOS_IOD_SINGLE) {
+			rc = grow_array((void **)&iod->iod_recxs, sizeof(*iod->iod_recxs),
+					*recxs_cap, cap);
+			if (rc != 0)
+				D_GOTO(out, rc);
+		}
 
 		rc = grow_array((void **)recx_ephs,
 				sizeof(daos_epoch_t), *recxs_cap, cap);
@@ -861,7 +863,13 @@ unpack_recxs(daos_iod_t *iod, daos_epoch_t **recx_ephs, int *recxs_cap,
 		*eph = rec->rec_epr.epr_lo;
 
 	(*recx_ephs)[iod->iod_nr] = rec->rec_epr.epr_lo;
-	iod->iod_recxs[iod->iod_nr] = rec->rec_recx;
+	if (type == DAOS_IOD_SINGLE) {
+		D_ASSERTF(iod->iod_nr == 0, "%u == 0\n", iod->iod_nr);
+		D_ASSERTF(iod->iod_recxs == NULL, "%p == NULL\n", iod->iod_recxs);
+	} else {
+		D_ASSERT(iod->iod_recxs != NULL);
+		iod->iod_recxs[iod->iod_nr] = rec->rec_recx;
+	}
 	iod->iod_nr++;
 	iod->iod_size = rec->rec_size;
 
@@ -887,9 +895,9 @@ unpack_recxs(daos_iod_t *iod, daos_epoch_t **recx_ephs, int *recxs_cap,
 
 	D_DEBUG(DB_IO, "unpacked data %p idx/nr "DF_U64"/"DF_U64
 		" ver %u eph "DF_U64" size %zd epr ["DF_U64"/"DF_U64"]\n",
-		rec, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
-		iod->iod_recxs[iod->iod_nr - 1].rx_nr, rec->rec_version,
-		*eph, iod->iod_size, rec->rec_epr.epr_lo, rec->rec_epr.epr_hi);
+		rec, iod->iod_recxs == NULL ? -1 : iod->iod_recxs[iod->iod_nr - 1].rx_idx,
+		iod->iod_recxs == NULL ? -1 : iod->iod_recxs[iod->iod_nr - 1].rx_nr,
+		rec->rec_version, *eph, iod->iod_size, rec->rec_epr.epr_lo, rec->rec_epr.epr_hi);
 
 out:
 	D_DEBUG(DB_IO, "unpacked nr %d version/type /%u/%d rc "DF_RC"\n",
