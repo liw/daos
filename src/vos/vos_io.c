@@ -1745,8 +1745,14 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		uint64_t	gsize;
 
-		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
-						   (uintptr_t)iod->iod_recxs;
+		if (iod->iod_recxs == NULL) {
+			gsize = iod->iod_size;
+		} else {
+			daos_oclass_id_t class = daos_obj_id2class(obj->obj_id.id_pub);
+
+			D_ASSERTF(class != 0, "%u != 0\n", class);
+			gsize = (uintptr_t)iod->iod_recxs;
+		}
 		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc,
 					minor_epc);
 		if (rc)
