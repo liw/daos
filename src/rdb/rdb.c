@@ -368,7 +368,17 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	 */
 	rc = vos_pool_open(path, (unsigned char *)uuid,
 			   VOS_POF_SMALL | VOS_POF_EXCL, &pool);
-	if (rc != 0) {
+	if (rc == -DER_ID_MISMATCH) {
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     "%s: incompatible DB UUID: "DF_UUIDF"\n",
+				     path, DP_UUID(uuid));
+		goto err;
+	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to open %s: "DF_RC"\n", DP_UUID(uuid),
 			path, DP_RC(rc));
 		goto err;
