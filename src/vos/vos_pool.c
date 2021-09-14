@@ -706,8 +706,25 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	gc_add_pool(pool);
 	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
 	return 0;
+
 failed:
-	vos_pool_decref(pool); /* -1 for myself */
+	if (pool->vp_io_ctxt != NULL) {
+		int rc_tmp;
+
+		rc_tmp = bio_ioctxt_close(pool->vp_io_ctxt, pool->vp_pool_df->pd_nvme_sz == 0);
+		if (rc_tmp)
+			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID" : "DF_RC"\n",
+				pool->vp_io_ctxt, DP_UUID(pool->vp_id), DP_RC(rc_tmp));
+		else
+			D_DEBUG(DB_MGMT, "Closed VOS I/O context:%p pool:"DF_UUID"\n",
+				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
+	}
+	if (pool->vp_vea_info != NULL)
+		vea_unload(pool->vp_vea_info);
+	if (daos_handle_is_valid(pool->vp_cont_th))
+		dbtree_close(pool->vp_cont_th);
+	vos_dedup_fini(pool);
+	D_FREE(pool);
 	return rc;
 }
 
