@@ -159,7 +159,7 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				pool_comp_state_t state);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
+		       const d_rank_list_t *ranks, int ndomains, const uint32_t *domains,
 		       daos_prop_t *prop, d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 

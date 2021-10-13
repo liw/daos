@@ -1459,8 +1459,7 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
-	     int nnodes, int ntargets, const uint32_t *domains, const d_rank_list_t *ranks,
-	     uint32_t dss_tgt_nr)
+	     int ntargets, const uint32_t *domains, const d_rank_list_t *ranks, uint32_t dss_tgt_nr)
 {
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
@@ -1468,6 +1467,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	uint32_t		num_comps;
 	uint8_t			new_status;
 	bool			updated;
+	int			nnodes = ranks->rl_nr;
 	int			i, rc;
 	uint32_t		num_domain_comps;
 
@@ -1569,7 +1569,6 @@ out_map_buf:
 	pool_buf_free(map_buf);
 	return rc;
 }
-
 
 int
 pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
