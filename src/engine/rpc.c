@@ -15,8 +15,8 @@ rpc_cb(const struct crt_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->cci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->cci_rc,
-			 sizeof(cb_info->cci_rc));
+	dss_abt_eventual_set(*eventual, (void *)&cb_info->cci_rc,
+			     sizeof(cb_info->cci_rc));
 }
 
 /**

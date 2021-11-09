@@ -66,7 +66,7 @@ bio_get_dev_state_internal(void *msg_arg)
 
 	dsm->devstate = dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
 	collect_bs_usage(dsm->xs->bxc_blobstore->bb_bs, &dsm->devstate);
-	ABT_eventual_set(dsm->eventual, NULL, 0);
+	dss_abt_eventual_set(dsm->eventual, NULL, 0);
 }
 
 static void
@@ -85,7 +85,7 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	if (rc)
 		D_ERROR("State transition failed, rc=%d\n", rc);
 
-	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
+	dss_abt_eventual_set(dsm->eventual, &rc, sizeof(rc));
 }
 
 /* Call internal method to increment CSUM media error. */

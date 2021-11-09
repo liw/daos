@@ -1233,7 +1233,7 @@ out:
 	if (pool != NULL)
 		ds_pool_put(pool);
 	if (iv_arg->iua_eventual)
-		ABT_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
+		dss_abt_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
 	D_FREE(iv_arg);
 }
 
@@ -1324,7 +1324,7 @@ pool_iv_srv_hdl_fetch_ult(void *data)
 
 	rc = ds_pool_iv_srv_hdl_fetch(arg->pool, NULL, NULL);
 
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	dss_abt_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 int

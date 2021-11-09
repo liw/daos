@@ -177,7 +177,7 @@ ds_iv_ns_put(struct ds_iv_ns *ns)
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 	if (ns->iv_refcount == 1)
-		ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
+		dss_abt_eventual_set(ns->iv_done_eventual, NULL, 0);
 	else if (ns->iv_refcount == 0)
 		ds_iv_ns_destroy(ns);
 }

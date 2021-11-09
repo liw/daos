@@ -195,8 +195,7 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->bci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
-			 sizeof(cb_info->bci_rc));
+	dss_abt_eventual_set(*eventual, (void *)&cb_info->bci_rc, sizeof(cb_info->bci_rc));
 	return 0;
 }
 

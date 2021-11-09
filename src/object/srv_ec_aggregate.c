@@ -661,7 +661,7 @@ agg_encode_full_stripe_ult(void *arg)
 	ec_encode_data(cell_bytes, k, p, entry->ae_codec->ec_gftbls, data,
 		       parity_bufs);
 
-	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
+	dss_abt_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
 /* Encodes a full stripe. Called when replicas form a full stripe.
@@ -1125,7 +1125,7 @@ agg_process_partial_stripe_ult(void *arg)
 		rc = agg_update_parity(entry, bit_map, cell_cnt);
 
 out:
-	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
+	dss_abt_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
 /* Driver function for partial stripe update. Fetches the data and then invokes
@@ -1388,7 +1388,7 @@ out_rpc:
 	if (rpc)
 		crt_req_decref(rpc);
 out:
-	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
+	dss_abt_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
 /* Invokes helper function to send the generated parity and the stripe number
@@ -1692,7 +1692,7 @@ out:
 	if (bulk_hdl)
 		crt_bulk_free(bulk_hdl);
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
-	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
+	dss_abt_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
 static int

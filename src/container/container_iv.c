@@ -891,7 +891,7 @@ out:
 	if (pool != NULL)
 		ds_pool_put(pool);
 
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	dss_abt_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 static int
@@ -1284,7 +1284,7 @@ out:
 	D_FREE(iv_entry);
 	if (prop_fetch != NULL)
 		daos_prop_free(prop_fetch);
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	dss_abt_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 int
@@ -1341,7 +1341,7 @@ cont_iv_snapshot_fetch_ult(void *data)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = cont_iv_snapshots_fetch(arg->ns, arg->cont_uuid, arg->snapshots,
 				     &arg->snapshot_cnt);
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	dss_abt_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 int

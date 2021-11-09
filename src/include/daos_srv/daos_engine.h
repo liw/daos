@@ -595,6 +595,15 @@ dss_abterr2der(int abt_errno)
 	}
 }
 
+static inline void
+dss_abt_eventual_set(ABT_eventual eventual, void *value, int nbytes)
+{
+	int rc;
+
+	rc = ABT_eventual_set(eventual, value, nbytes);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_set: %d\n", rc);
+}
+
 /** RPC counter types */
 enum dss_rpc_cntr_id {
 	DSS_RC_OBJ	= 0,

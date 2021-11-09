@@ -228,8 +228,7 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	D_ASSERT(arg->bulks_inflight > 0);
 	arg->bulks_inflight--;
 	if (arg->bulks_inflight == 0)
-		ABT_eventual_set(arg->eventual, &arg->result,
-				 sizeof(arg->result));
+		dss_abt_eventual_set(arg->eventual, &arg->result, sizeof(arg->result));
 
 	crt_req_decref(rpc);
 	return cb_info->bci_rc;
@@ -517,7 +516,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	}
 done:
 	if (--(p_arg->bulks_inflight) == 0)
-		ABT_eventual_set(p_arg->eventual, &rc, sizeof(rc));
+		dss_abt_eventual_set(p_arg->eventual, &rc, sizeof(rc));
 
 	if (async)
 		return rc;
