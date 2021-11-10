@@ -272,7 +272,8 @@ ds_csum_agg_recalc(void *recalc_args)
 				   ent_in->ei_rect.rc_ex.ex_lo);
 out:
 	/* Eventual set okay, even with no offload (unit test). */
-	dss_abt_eventual_set(args->csum_eventual, NULL, 0);
+	if (args->csum_eventual != ABT_EVENTUAL_NULL)
+		dss_abt_eventual_set(args->csum_eventual, NULL, 0);
 	daos_csummer_destroy(&csummer);
 	D_FREE(sgl.sg_iovs);
 	args->cra_rc = rc;
