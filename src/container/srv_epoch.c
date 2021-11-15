@@ -374,11 +374,8 @@ xfer_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *con
 		rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, NULL);
 		if (rc != 0)
 			goto out_bulk;
-		rc = ABT_eventual_wait(eventual, (void **)&status);
-		if (rc != ABT_SUCCESS)
-			rc = dss_abterr2der(rc);
-		else
-			rc = *status;
+		DABT_EVENTUAL_WAIT(eventual, (void **)&status);
+		rc = *status;
 		D_DEBUG(DF_DSMS, DF_CONT": done bulk transfer xfer_size=%d, rc=%d\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), xfer_size, rc);
 

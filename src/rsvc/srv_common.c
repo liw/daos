@@ -456,15 +456,8 @@ attr_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t op,
 	if (rc != 0)
 		goto out_eventual;
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto out_eventual;
-	}
-	if (*status != 0) {
-		rc = *status;
-		goto out_eventual;
-	}
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
+	rc = *status;
 
 out_eventual:
 	ABT_eventual_free(&eventual);

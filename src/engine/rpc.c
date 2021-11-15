@@ -43,9 +43,7 @@ dss_rpc_send(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 
 	rc = *status;
 

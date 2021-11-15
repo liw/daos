@@ -1352,9 +1352,7 @@ ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
 	if (rc)
 		D_GOTO(out_eventual, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 	if (*status != 0)
 		D_GOTO(out_eventual, rc = *status);
 

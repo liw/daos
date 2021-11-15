@@ -260,12 +260,7 @@ ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 	if (rc != 0)
 		goto out_eventual;
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto out_eventual;
-	}
-
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 	rc = *status;
 
 out_eventual:

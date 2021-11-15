@@ -660,8 +660,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 	}
 
 	/* Wait for all transfers to complete. */
-	rc = ABT_eventual_wait(arg.drb_eventual, NULL /* value */);
-	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	DABT_EVENTUAL_WAIT(arg.drb_eventual, NULL /* value */);
 	rc = arg.drb_rc;
 
 out_eventual:

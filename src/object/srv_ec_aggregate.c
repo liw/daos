@@ -685,15 +685,8 @@ agg_encode_full_stripe(struct ec_agg_entry *entry)
 	if (rc)
 		goto ev_out;
 
-	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto ev_out;
-	}
-	if (*status != 0)
-		rc = *status;
-	else
-		rc = 0;
+	DABT_EVENTUAL_WAIT(stripe_ud.asu_eventual, (void **)&status);
+	rc = *status;
 
 ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
@@ -1224,15 +1217,8 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
-	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto ev_out;
-	}
-	if (*status != 0) {
-		rc = *status;
-		goto ev_out;
-	}
+	DABT_EVENTUAL_WAIT(stripe_ud.asu_eventual, (void **)&status);
+	rc = *status;
 
 ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
@@ -1453,13 +1439,8 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
-	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto ev_out;
-	}
-	if (*status != 0)
-		rc = *status;
+	DABT_EVENTUAL_WAIT(stripe_ud.asu_eventual, (void **)&status);
+	rc = *status;
 ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 out:
@@ -1735,11 +1716,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
-	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto ev_out;
-	}
+	DABT_EVENTUAL_WAIT(stripe_ud.asu_eventual, (void **)&status);
 	if (*status != 0)
 		D_GOTO(ev_out, rc = *status);
 

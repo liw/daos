@@ -1022,7 +1022,7 @@ dma_rw(struct bio_desc *biod)
 	} else {
 		biod->bd_dma_issued = 1;
 		if (biod->bd_inflights != 0)
-			ABT_eventual_wait(biod->bd_dma_done, NULL);
+			DABT_EVENTUAL_WAIT(biod->bd_dma_done, NULL);
 	}
 
 	biod->bd_ctxt->bic_inflight_dmas--;

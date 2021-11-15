@@ -2593,7 +2593,7 @@ migrate_fini_one_ult(void *data)
 	ABT_cond_broadcast(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
-	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+	DABT_EVENTUAL_WAIT(tls->mpt_done_eventual, NULL);
 	migrate_pool_tls_put(tls); /* destroy */
 
 	D_DEBUG(DB_TRACE, "abort one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));

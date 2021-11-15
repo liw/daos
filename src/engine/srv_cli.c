@@ -112,12 +112,9 @@ dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg, int arg_size,
 	rc = tse_task_schedule(task, true);
 
 	if (sync) {
-		int	ret;
-
-		ret = ABT_eventual_wait(eventual, (void **)&status);
+		DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 		if (rc == 0)
-			rc = ret != ABT_SUCCESS ?
-			     dss_abterr2der(ret) : *status;
+			rc = *status;
 
 		ABT_eventual_free(&eventual);
 	}

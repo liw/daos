@@ -21,4 +21,13 @@
 			  nbytes, dabt_rc);							\
 	} while (0)
 
+#define DABT_EVENTUAL_WAIT(eventual, value)							\
+	do {											\
+		int dabt_rc;									\
+												\
+		dabt_rc = ABT_eventual_wait(eventual, value);					\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_eventual_wait(%p): %d\n", value,		\
+			  dabt_rc);								\
+	} while (0)
+
 #endif /* DAOS_SRV_ABT_H */

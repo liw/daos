@@ -121,9 +121,7 @@ bio_get_dev_state(struct nvme_stats *state, struct bio_xs_context *xs)
 
 	spdk_thread_send_msg(owner_thread(xs->bxc_blobstore),
 			     bio_get_dev_state_internal, &dsm);
-	rc = ABT_eventual_wait(dsm.eventual, NULL);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
+	DABT_EVENTUAL_WAIT(dsm.eventual, NULL);
 
 	*state = dsm.devstate;
 
@@ -162,11 +160,8 @@ bio_dev_set_faulty(struct bio_xs_context *xs)
 
 	spdk_thread_send_msg(owner_thread(xs->bxc_blobstore),
 			     bio_dev_set_faulty_internal, &dsm);
-	rc = ABT_eventual_wait(dsm.eventual, (void **)&dsm_rc);
-	if (rc == 0)
-		rc = *dsm_rc;
-	else
-		rc = dss_abterr2der(rc);
+	DABT_EVENTUAL_WAIT(dsm.eventual, (void **)&dsm_rc);
+	rc = *dsm_rc;
 
 	if (ABT_eventual_free(&dsm.eventual) != ABT_SUCCESS)
 		rc = dss_abterr2der(rc);

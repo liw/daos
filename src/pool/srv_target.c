@@ -275,7 +275,7 @@ static int
 pool_child_delete_one(void *uuid)
 {
 	struct ds_pool_child *child;
-	int *ref, rc;
+	int *ref;
 
 	child = ds_pool_child_lookup(uuid);
 	if (child == NULL)
@@ -288,10 +288,7 @@ pool_child_delete_one(void *uuid)
 
 	ds_pool_child_put(child); /* -1 for lookup */
 
-	rc = ABT_eventual_wait(child->spc_ref_eventual, (void **)&ref);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
+	DABT_EVENTUAL_WAIT(child->spc_ref_eventual, (void **)&ref);
 	ABT_eventual_free(&child->spc_ref_eventual);
 
 	/* only stop gc ULT when all ops ULTs are done */

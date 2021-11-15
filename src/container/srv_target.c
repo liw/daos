@@ -2650,9 +2650,7 @@ ds_cont_rf_check(uuid_t pool_uuid)
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = ABT_eventual_wait(check_arg.crc_eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(check_arg.crc_eventual, (void **)&status);
 	rc = *status;
 
 out:

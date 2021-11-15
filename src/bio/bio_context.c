@@ -176,9 +176,7 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 		rc = xs_poll_completion(xs_ctxt, &ba->bca_inflights, 0);
 		D_ASSERT(rc == 0);
 	} else {
-		rc = ABT_eventual_wait(ba->bca_eventual, NULL);
-		if (rc != ABT_SUCCESS)
-			D_ERROR("ABT eventual wait failed. %d", rc);
+		DABT_EVENTUAL_WAIT(ba->bca_eventual, NULL);
 	}
 }
 
