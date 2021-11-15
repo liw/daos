@@ -978,7 +978,6 @@ static void
 fini_events(struct pool_svc *svc)
 {
 	struct pool_svc_events *events = &svc->ps_events;
-	int			rc;
 
 	D_ASSERT(events->pse_handler != ABT_THREAD_NULL);
 
@@ -989,9 +988,7 @@ fini_events(struct pool_svc *svc)
 	ABT_cond_broadcast(events->pse_cv);
 	ABT_mutex_unlock(events->pse_mutex);
 
-	rc = ABT_thread_join(events->pse_handler);
-	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&events->pse_handler);
+	DABT_THREAD_FREE(&events->pse_handler);
 	events->pse_handler = ABT_THREAD_NULL;
 }
 
@@ -1527,8 +1524,7 @@ ds_pool_start_all(void)
 			DP_RC(rc));
 		return rc;
 	}
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 	return 0;
 }
 
@@ -1572,8 +1568,7 @@ ds_pool_stop_all(void)
 			DP_RC(rc));
 		return rc;
 	}
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 
 	return 0;
 }

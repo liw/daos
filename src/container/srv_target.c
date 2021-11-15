@@ -471,7 +471,7 @@ cont_start_agg_ult(struct ds_cont_child *cont, void (*func)(void *),
 		D_CRIT(DF_CONT"[%d]: Failed to get req for aggregation ULT\n",
 		       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		       dmi->dmi_tgt_id);
-		ABT_thread_free(&agg_ult);
+		DABT_THREAD_FREE(&agg_ult);
 		return -DER_NOMEM;
 	}
 

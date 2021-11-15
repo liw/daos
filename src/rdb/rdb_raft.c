@@ -2535,20 +2535,14 @@ rdb_raft_start(struct rdb *db)
 
 err_callbackd:
 	db->d_stop = true;
-	rc = ABT_thread_join(db->d_callbackd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_callbackd);
+	DABT_THREAD_FREE(&db->d_callbackd);
 err_timerd:
 	db->d_stop = true;
-	rc = ABT_thread_join(db->d_timerd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_timerd);
+	DABT_THREAD_FREE(&db->d_timerd);
 err_recvd:
 	db->d_stop = true;
 	ABT_cond_broadcast(db->d_replies_cv);
-	rc = ABT_thread_join(db->d_recvd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_recvd);
+	DABT_THREAD_FREE(&db->d_recvd);
 err_lc:
 	rdb_raft_unload_lc(db);
 err_raft:
@@ -2570,8 +2564,6 @@ err:
 void
 rdb_raft_stop(struct rdb *db)
 {
-	int rc;
-
 	/* Stop sending any new RPCs. */
 	db->d_stop = true;
 
@@ -2601,18 +2593,10 @@ rdb_raft_stop(struct rdb *db)
 	ABT_mutex_unlock(db->d_mutex);
 
 	/* Join and free all daemons. */
-	rc = ABT_thread_join(db->d_compactd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_compactd);
-	rc = ABT_thread_join(db->d_callbackd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_callbackd);
-	rc = ABT_thread_join(db->d_timerd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_timerd);
-	rc = ABT_thread_join(db->d_recvd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_recvd);
+	DABT_THREAD_FREE(&db->d_compactd);
+	DABT_THREAD_FREE(&db->d_callbackd);
+	DABT_THREAD_FREE(&db->d_timerd);
+	DABT_THREAD_FREE(&db->d_recvd);
 
 	rdb_raft_unload_lc(db);
 	raft_free(db->d_raft);

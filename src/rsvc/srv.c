@@ -425,11 +425,7 @@ drain_map_distd(struct ds_rsvc *svc)
 static void
 fini_map_distd(struct ds_rsvc *svc)
 {
-	int rc;
-
-	rc = ABT_thread_join(svc->s_map_distd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&svc->s_map_distd);
+	DABT_THREAD_FREE(&svc->s_map_distd);
 }
 
 static int
@@ -998,8 +994,7 @@ ds_rsvc_stop_all(enum ds_rsvc_class_id class)
 	/* Wait for the stopper ULTs to return. */
 	d_list_for_each_entry_safe(ult, ult_tmp, &arg.saa_list, su_entry) {
 		d_list_del_init(&ult->su_entry);
-		ABT_thread_join(ult->su_thread);
-		ABT_thread_free(&ult->su_thread);
+		DABT_THREAD_FREE(&ult->su_thread);
 		D_FREE(ult);
 	}
 

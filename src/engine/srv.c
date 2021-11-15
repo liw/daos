@@ -763,8 +763,7 @@ dss_xstreams_fini(bool force)
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
-		ABT_thread_join(dx->dx_progress);
-		ABT_thread_free(&dx->dx_progress);
+		DABT_THREAD_FREE(&dx->dx_progress);
 		ABT_future_free(&dx->dx_shutdown);
 		ABT_future_free(&dx->dx_stopping);
 	}

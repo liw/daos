@@ -741,7 +741,7 @@ out:
 		rc1 = 0;
 
 	if (child != ABT_THREAD_NULL)
-		ABT_thread_free(&child);
+		DABT_THREAD_FREE(&child);
 
 	if (dra.dra_future != ABT_FUTURE_NULL) {
 		rc2 = dtx_req_wait(&dra);

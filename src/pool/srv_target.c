@@ -139,7 +139,7 @@ start_gc_ult(struct ds_pool_child *child)
 	if (child->spc_gc_req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
 		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_free(&gc);
+		DABT_THREAD_FREE(&gc);
 		return -DER_NOMEM;
 	}
 
@@ -601,7 +601,7 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	if (pool->sp_ec_ephs_req == NULL) {
 		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
 			DP_UUID(pool->sp_uuid));
-		ABT_thread_free(&ec_eph_query_ult);
+		DABT_THREAD_FREE(&ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
 

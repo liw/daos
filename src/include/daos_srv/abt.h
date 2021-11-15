@@ -12,6 +12,22 @@
 #ifndef DAOS_SRV_ABT_H
 #define DAOS_SRV_ABT_H
 
+#define DABT_THREAD_JOIN(thread)								\
+	do {											\
+		int dabt_rc;									\
+												\
+		dabt_rc = ABT_thread_join(thread);						\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_thread_join: %d\n", dabt_rc);		\
+	} while (0)
+
+#define DABT_THREAD_FREE(thread)								\
+	do {											\
+		int dabt_rc;									\
+												\
+		dabt_rc = ABT_thread_free(thread);						\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_thread_free(%p): %d\n", thread, dabt_rc);\
+	} while (0)
+
 #define DABT_EVENTUAL_SET(eventual, value, nbytes)						\
 	do {											\
 		int dabt_rc;									\
@@ -35,7 +51,8 @@
 		int dabt_rc;									\
 												\
 		dabt_rc = ABT_eventual_free(eventual);						\
-		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_eventual_free: %d\n", dabt_rc);		\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_eventual_free(%p): %d\n", eventual,	\
+			  dabt_rc);								\
 	} while (0)
 
 #define DABT_FUTURE_SET(future, value)								\
