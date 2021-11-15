@@ -2654,7 +2654,7 @@ ds_cont_rf_check(uuid_t pool_uuid)
 	rc = *status;
 
 out:
-	ABT_eventual_free(&check_arg.crc_eventual);
+	DABT_EVENTUAL_FREE(&check_arg.crc_eventual);
 	return rc;
 }
 

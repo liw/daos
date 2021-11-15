@@ -256,7 +256,7 @@ out_list:
 out_gc:
 	stop_gc_ult(child);
 out_eventual:
-	ABT_eventual_free(&child->spc_ref_eventual);
+	DABT_EVENTUAL_FREE(&child->spc_ref_eventual);
 out_vos:
 	vos_pool_close(child->spc_hdl);
 out_metrics:
@@ -289,7 +289,7 @@ pool_child_delete_one(void *uuid)
 	ds_pool_child_put(child); /* -1 for lookup */
 
 	DABT_EVENTUAL_WAIT(child->spc_ref_eventual, (void **)&ref);
-	ABT_eventual_free(&child->spc_ref_eventual);
+	DABT_EVENTUAL_FREE(&child->spc_ref_eventual);
 
 	/* only stop gc ULT when all ops ULTs are done */
 	stop_gc_ult(child);

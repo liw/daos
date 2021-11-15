@@ -48,7 +48,7 @@ blob_cp_arg_init(struct blob_cp_arg *ba)
 static inline void
 blob_cp_arg_fini(struct blob_cp_arg *ba)
 {
-	ABT_eventual_free(&ba->bca_eventual);
+	DABT_EVENTUAL_FREE(&ba->bca_eventual);
 }
 
 static void

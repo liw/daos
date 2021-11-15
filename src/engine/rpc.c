@@ -48,7 +48,7 @@ dss_rpc_send(crt_rpc_t *rpc)
 	rc = *status;
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out:
 	return rc;
 }

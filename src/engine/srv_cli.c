@@ -89,7 +89,7 @@ dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg, int arg_size,
 					 sizeof(eventual));
 		if (rc) {
 			tse_task_complete(task, rc);
-			ABT_eventual_free(&eventual);
+			DABT_EVENTUAL_FREE(&eventual);
 			return rc;
 		}
 	}
@@ -103,7 +103,7 @@ dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg, int arg_size,
 		if (rc) {
 			tse_task_complete(task, rc);
 			if (sync)
-				ABT_eventual_free(&eventual);
+				DABT_EVENTUAL_FREE(&eventual);
 			return rc;
 		}
 	}
@@ -116,7 +116,7 @@ dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg, int arg_size,
 		if (rc == 0)
 			rc = *status;
 
-		ABT_eventual_free(&eventual);
+		DABT_EVENTUAL_FREE(&eventual);
 	}
 
 	return rc;

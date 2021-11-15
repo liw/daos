@@ -382,7 +382,7 @@ xfer_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *con
 out_bulk:
 		crt_bulk_free(bulk_desc.bd_local_hdl);
 out_eventual:
-		ABT_eventual_free(&eventual);
+		DABT_EVENTUAL_FREE(&eventual);
 	}
 
 out_mem:

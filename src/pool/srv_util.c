@@ -264,7 +264,7 @@ ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 	rc = *status;
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out_bulk:
 	crt_bulk_free(bulk);
 out:

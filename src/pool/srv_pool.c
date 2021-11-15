@@ -2463,7 +2463,7 @@ transfer_cont_buf(struct daos_pool_cont_info *cont_buf, size_t ncont,
 		D_GOTO(out_eventual, rc = *status);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out_bulk:
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
@@ -5100,7 +5100,7 @@ transfer_ranks_buf(d_rank_t *ranks_buf, size_t nranks,
 		D_GOTO(out_eventual, rc = *status);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out_bulk:
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
@@ -5677,7 +5677,7 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
 		D_GOTO(out_eventual, rc = *status);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 

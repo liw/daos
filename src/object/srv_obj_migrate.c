@@ -299,7 +299,7 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 	if (tls->mpt_svc_list.rl_ranks)
 		D_FREE(tls->mpt_svc_list.rl_ranks);
 	if (tls->mpt_done_eventual)
-		ABT_eventual_free(&tls->mpt_done_eventual);
+		DABT_EVENTUAL_FREE(&tls->mpt_done_eventual);
 	if (tls->mpt_inflight_cond)
 		ABT_cond_free(&tls->mpt_inflight_cond);
 	if (tls->mpt_inflight_mutex)

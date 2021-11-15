@@ -202,7 +202,7 @@ bio_iod_free(struct bio_desc *biod)
 	D_ASSERT(!biod->bd_buffer_prep);
 
 	if (biod->bd_dma_done != ABT_EVENTUAL_NULL)
-		ABT_eventual_free(&biod->bd_dma_done);
+		DABT_EVENTUAL_FREE(&biod->bd_dma_done);
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);

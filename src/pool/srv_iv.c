@@ -1362,7 +1362,7 @@ ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
 		uuid_copy(*srv_pool_hdl, pool->sp_srv_pool_hdl);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 

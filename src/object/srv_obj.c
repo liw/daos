@@ -525,7 +525,7 @@ done:
 	if (rc == 0)
 		rc = *status;
 
-	ABT_eventual_free(&p_arg->eventual);
+	DABT_EVENTUAL_FREE(&p_arg->eventual);
 	/* After RDMA is done, corrupt the server data */
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 		struct bio_sglist	*fbsgl;
@@ -4016,7 +4016,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		DABT_EVENTUAL_WAIT(bulks[i].eventual, (void **)&status);
 		rc = *status;
 
-		ABT_eventual_free(&bulks[i].eventual);
+		DABT_EVENTUAL_FREE(&bulks[i].eventual);
 		bio_iod_flush(biods[i]);
 		rma_idx++;
 
@@ -4144,7 +4144,7 @@ out:
 					continue;
 
 				DABT_EVENTUAL_WAIT(bulks[i].eventual, NULL);
-				ABT_eventual_free(&bulks[i].eventual);
+				DABT_EVENTUAL_FREE(&bulks[i].eventual);
 				rma_idx++;
 			}
 		}

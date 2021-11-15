@@ -124,7 +124,7 @@ create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz,
 		D_ERROR("Create blob failed. "DF_RC"\n", DP_RC(rc));
 	else
 		*blob_id = boa.boa_blob_id;
-	ABT_eventual_free(&boa.boa_eventual);
+	DABT_EVENTUAL_FREE(&boa.boa_eventual);
 	return rc;
 }
 
@@ -147,7 +147,7 @@ delete_one_blob(struct spdk_blob_store *bs, spdk_blob_id blob_id)
 	if (rc)
 		D_ERROR("Delete blob("DF_U64") failed. "DF_RC"\n",
 			blob_id, DP_RC(rc));
-	ABT_eventual_free(&boa.boa_eventual);
+	DABT_EVENTUAL_FREE(&boa.boa_eventual);
 	return rc;
 }
 

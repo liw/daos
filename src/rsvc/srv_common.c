@@ -460,7 +460,7 @@ attr_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t op,
 	rc = *status;
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out:
 	return rc;
 }

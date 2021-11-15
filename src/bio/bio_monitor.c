@@ -125,11 +125,9 @@ bio_get_dev_state(struct nvme_stats *state, struct bio_xs_context *xs)
 
 	*state = dsm.devstate;
 
-	rc = ABT_eventual_free(&dsm.eventual);
-	if (rc != ABT_SUCCESS)
-		rc = dss_abterr2der(rc);
+	DABT_EVENTUAL_FREE(&dsm.eventual);
 
-	return rc;
+	return 0;
 }
 
 /*
@@ -163,8 +161,7 @@ bio_dev_set_faulty(struct bio_xs_context *xs)
 	DABT_EVENTUAL_WAIT(dsm.eventual, (void **)&dsm_rc);
 	rc = *dsm_rc;
 
-	if (ABT_eventual_free(&dsm.eventual) != ABT_SUCCESS)
-		rc = dss_abterr2der(rc);
+	DABT_EVENTUAL_FREE(&dsm.eventual);
 
 	return rc;
 }

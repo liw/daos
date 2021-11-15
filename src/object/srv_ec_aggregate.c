@@ -689,7 +689,7 @@ agg_encode_full_stripe(struct ec_agg_entry *entry)
 	rc = *status;
 
 ev_out:
-	ABT_eventual_free(&stripe_ud.asu_eventual);
+	DABT_EVENTUAL_FREE(&stripe_ud.asu_eventual);
 out:
 	return rc;
 }
@@ -1221,7 +1221,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	rc = *status;
 
 ev_out:
-	ABT_eventual_free(&stripe_ud.asu_eventual);
+	DABT_EVENTUAL_FREE(&stripe_ud.asu_eventual);
 
 out:
 	return rc;
@@ -1442,7 +1442,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	DABT_EVENTUAL_WAIT(stripe_ud.asu_eventual, (void **)&status);
 	rc = *status;
 ev_out:
-	ABT_eventual_free(&stripe_ud.asu_eventual);
+	DABT_EVENTUAL_FREE(&stripe_ud.asu_eventual);
 out:
 	D_FREE(targets);
 	return rc;
@@ -1747,7 +1747,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	}
 ev_out:
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
-	ABT_eventual_free(&stripe_ud.asu_eventual);
+	DABT_EVENTUAL_FREE(&stripe_ud.asu_eventual);
 
 out:
 	D_FREE(stripe_ud.asu_recxs);

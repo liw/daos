@@ -718,7 +718,7 @@ iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 
 	D_ASSERT(d_list_empty(&ns->iv_entry_list));
 	d_list_del(&ns->iv_ns_link);
-	ABT_eventual_free(&ns->iv_done_eventual);
+	DABT_EVENTUAL_FREE(&ns->iv_done_eventual);
 	D_FREE(ns);
 }
 

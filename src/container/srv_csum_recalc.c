@@ -298,6 +298,6 @@ ds_csum_recalc(void *args)
 	dss_ult_create(ds_csum_agg_recalc, args,
 		       DSS_XS_OFFLOAD, cs_args->cra_tgt_id, 0, NULL);
 	DABT_EVENTUAL_WAIT(cs_args->csum_eventual, NULL);
-	ABT_eventual_free(&cs_args->csum_eventual);
+	DABT_EVENTUAL_FREE(&cs_args->csum_eventual);
 }
 #endif

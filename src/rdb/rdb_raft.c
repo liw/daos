@@ -664,7 +664,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 	rc = arg.drb_rc;
 
 out_eventual:
-	ABT_eventual_free(&arg.drb_eventual);
+	DABT_EVENTUAL_FREE(&arg.drb_eventual);
 out_data_bulk:
 	crt_bulk_free(data_bulk);
 out_kds_bulk:
