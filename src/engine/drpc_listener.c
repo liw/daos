@@ -182,12 +182,11 @@ drpc_listener_stop(void)
 	DABT_THREAD_JOIN(status.thread);
 }
 
-int
+void
 drpc_listener_fini(void)
 {
 	drpc_listener_stop();
 	DABT_THREAD_FREE(&status.thread);
 	DABT_MUTEX_FREE(&status.running_mutex);
 	D_FREE(drpc_listener_socket_path);
-	return 0;
 }

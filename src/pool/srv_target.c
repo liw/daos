@@ -73,7 +73,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
-		dss_abt_eventual_set(child->spc_ref_eventual, (void *)&child->spc_ref,
+		DABT_EVENTUAL_SET(child->spc_ref_eventual, (void *)&child->spc_ref,
 				     sizeof(child->spc_ref));
 	}
 }

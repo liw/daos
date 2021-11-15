@@ -564,7 +564,7 @@ rdb_raft_recv_is_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	}
 	arg->drb_n--;
 	if (arg->drb_n == 0)
-		dss_abt_eventual_set(arg->drb_eventual, NULL /* value */, 0 /* nbytes */);
+		DABT_EVENTUAL_SET(arg->drb_eventual, NULL /* value */, 0 /* nbytes */);
 	return 0;
 }
 

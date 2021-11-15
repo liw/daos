@@ -73,7 +73,7 @@ blob_create_cp(void *cb_arg, spdk_blob_id blob_id, int rc)
 
 	boa->boa_rc = daos_errno2der(-rc);
 	boa->boa_blob_id = blob_id;
-	dss_abt_eventual_set(boa->boa_eventual, NULL, 0);
+	DABT_EVENTUAL_SET(boa->boa_eventual, NULL, 0);
 	if (rc)
 		D_ERROR("Create blob failed. %d\n", rc);
 }
@@ -84,7 +84,7 @@ blob_delete_cp(void *cb_arg, int rc)
 	struct blob_ops_arg	*boa = cb_arg;
 
 	boa->boa_rc = daos_errno2der(-rc);
-	dss_abt_eventual_set(boa->boa_eventual, NULL, 0);
+	DABT_EVENTUAL_SET(boa->boa_eventual, NULL, 0);
 	if (rc)
 		D_ERROR("Delete blob failed. %d\n", rc);
 }

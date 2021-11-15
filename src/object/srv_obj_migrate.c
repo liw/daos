@@ -326,7 +326,7 @@ migrate_pool_tls_put(struct migrate_pool_tls *tls)
 		return;
 	tls->mpt_refcount--;
 	if (tls->mpt_fini && tls->mpt_refcount == 1)
-		dss_abt_eventual_set(tls->mpt_done_eventual, NULL, 0);
+		DABT_EVENTUAL_SET(tls->mpt_done_eventual, NULL, 0);
 	if (tls->mpt_refcount == 0)
 		migrate_pool_tls_destroy(tls);
 }

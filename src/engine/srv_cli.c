@@ -60,7 +60,7 @@ dsc_task_comp_cb(tse_task_t *task, void *arg)
 {
 	ABT_eventual *eventual = arg;
 
-	dss_abt_eventual_set(*eventual, &task->dt_result, sizeof(task->dt_result));
+	DABT_EVENTUAL_SET(*eventual, &task->dt_result, sizeof(task->dt_result));
 	return 0;
 }
 

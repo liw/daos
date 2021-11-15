@@ -875,7 +875,7 @@ rw_completion(void *cb_arg, int err)
 
 skip_media_error:
 	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
-		dss_abt_eventual_set(biod->bd_dma_done, NULL, 0);
+		DABT_EVENTUAL_SET(biod->bd_dma_done, NULL, 0);
 }
 
 void

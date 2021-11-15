@@ -2572,7 +2572,7 @@ cont_rf_check_ult(void *data)
 	}
 
 	ds_pool_child_put(pool_child);
-	dss_abt_eventual_set(arg->crc_eventual, (void *)&rc, sizeof(rc));
+	DABT_EVENTUAL_SET(arg->crc_eventual, (void *)&rc, sizeof(rc));
 }
 
 static int

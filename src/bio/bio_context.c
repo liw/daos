@@ -84,7 +84,7 @@ blob_common_cb(struct blob_cp_arg *ba, int rc)
 
 	D_ASSERT(ba->bca_inflights == 1);
 	ba->bca_inflights--;
-	dss_abt_eventual_set(ba->bca_eventual, NULL, 0);
+	DABT_EVENTUAL_SET(ba->bca_eventual, NULL, 0);
 }
 
 /*
