@@ -4599,8 +4599,7 @@ out:
 	ds_obj_cpd_set_sub_result(oco, dca->dca_idx, rc,
 				  dcsh->dcsh_epoch.oe_value);
 
-	rc = ABT_future_set(dca->dca_future, NULL);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
+	DABT_FUTURE_SET(dca->dca_future, NULL);
 }
 
 void
@@ -4700,7 +4699,7 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 		if (rc != 0) {
 			struct daos_cpd_sub_head	*dcsh;
 
-			ABT_future_set(future, NULL);
+			DABT_FUTURE_SET(future, NULL);
 			dcsh = ds_obj_cpd_get_dcsh(rpc, i);
 			ds_obj_cpd_set_sub_result(oco, i, rc,
 						  dcsh->dcsh_epoch.oe_value);

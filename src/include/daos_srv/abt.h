@@ -38,4 +38,12 @@
 		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_eventual_free: %d\n", dabt_rc);		\
 	} while (0)
 
+#define DABT_FUTURE_SET(future, value)								\
+	do {											\
+		int dabt_rc;									\
+												\
+		dabt_rc = ABT_future_set(future, value);					\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_future_set(%p): %d\n", value, dabt_rc);	\
+	} while (0)
+
 #endif /* DAOS_SRV_ABT_H */

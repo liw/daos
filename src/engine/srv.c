@@ -453,7 +453,7 @@ dss_srv_handler(void *arg)
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
-			ABT_future_set(dx->dx_shutdown, dx);
+			DABT_FUTURE_SET(dx->dx_shutdown, dx);
 			wait_all_exited(dx);
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
@@ -749,7 +749,7 @@ dss_xstreams_fini(bool force)
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
-		ABT_future_set(dx->dx_stopping, dx);
+		DABT_FUTURE_SET(dx->dx_stopping, dx);
 	}
 
 	/** Stop & free progress ULTs */
@@ -757,7 +757,7 @@ dss_xstreams_fini(bool force)
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
-		ABT_future_set(dx->dx_shutdown, dx);
+		DABT_FUTURE_SET(dx->dx_shutdown, dx);
 	}
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];

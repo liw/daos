@@ -1735,8 +1735,7 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 	ABT_future		future = dlh->dlh_future;
 
 	sub->dss_result = rc;
-	rc = ABT_future_set(future, dlh);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
+	DABT_FUTURE_SET(future, dlh);
 
 	D_DEBUG(DB_TRACE, "execute from rank %d tag %d, rc %d.\n",
 		sub->dss_tgt.st_rank, sub->dss_tgt.st_tgt_idx,
@@ -1767,11 +1766,7 @@ dtx_leader_exec_ops_ult(void *arg)
 		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
 		    (i == daos_fail_value_get() &&
 		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
-			int ret;
-
-			ret = ABT_future_set(future, dlh);
-			D_ASSERTF(ret == ABT_SUCCESS,
-				  "ABT_future_set failed %d.\n", ret);
+			DABT_FUTURE_SET(future, dlh);
 			continue;
 		}
 
@@ -1783,13 +1778,8 @@ dtx_leader_exec_ops_ult(void *arg)
 	}
 
 	if (rc != 0) {
-		for (i++; i < dlh->dlh_sub_cnt; i++) {
-			int ret;
-
-			ret = ABT_future_set(future, dlh);
-			D_ASSERTF(ret == ABT_SUCCESS,
-				  "ABT_future_set failed %d.\n", ret);
-		}
+		for (i++; i < dlh->dlh_sub_cnt; i++)
+			DABT_FUTURE_SET(future, dlh);
 	}
 
 	D_FREE(ult_arg);

@@ -944,7 +944,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 				iv_value->sg_iovs[0].iov_len);
 	}
 
-	ABT_future_set(cb_info->future, &rc);
+	DABT_FUTURE_SET(cb_info->future, &rc);
 	return ret;
 }
 
