@@ -465,13 +465,13 @@ dss_srv_handler(void *arg)
 	D_ASSERT(!xstream_data.xd_ult_signal);
 	xstream_data.xd_ult_signal = true;
 	xstream_data.xd_ult_init_rc = 0;
-	ABT_cond_signal(xstream_data.xd_ult_init);
+	DABT_COND_SIGNAL(xstream_data.xd_ult_init);
 
 	/* wait until all xstreams are ready, otherwise it is not safe
 	 * to run lock-free dss_collective, although this race is not
 	 * realistically possible in the DAOS stack.
 	 */
-	ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
+	DABT_COND_WAIT(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
 	signal_caller = false;
@@ -516,7 +516,7 @@ signal:
 		D_ASSERT(!xstream_data.xd_ult_signal);
 		xstream_data.xd_ult_signal = true;
 		xstream_data.xd_ult_init_rc = rc;
-		ABT_cond_signal(xstream_data.xd_ult_init);
+		DABT_COND_SIGNAL(xstream_data.xd_ult_init);
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 	}
 }
@@ -702,7 +702,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	ABT_mutex_lock(xstream_data.xd_mutex);
 
 	if (!xstream_data.xd_ult_signal)
-		ABT_cond_wait(xstream_data.xd_ult_init, xstream_data.xd_mutex);
+		DABT_COND_WAIT(xstream_data.xd_ult_init, xstream_data.xd_mutex);
 	xstream_data.xd_ult_signal = false;
 	rc = xstream_data.xd_ult_init_rc;
 	if (rc != 0) {
@@ -798,7 +798,7 @@ void
 dss_xstreams_open_barrier(void)
 {
 	ABT_mutex_lock(xstream_data.xd_mutex);
-	ABT_cond_broadcast(xstream_data.xd_ult_barrier);
+	DABT_COND_BROADCAST(xstream_data.xd_ult_barrier);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 }
 
@@ -1169,7 +1169,7 @@ dss_srv_fini(bool force)
 		ABT_cond_free(&xstream_data.xd_ult_init);
 		/* fall through */
 	case XD_INIT_MUTEX:
-		ABT_mutex_free(&xstream_data.xd_mutex);
+		DABT_MUTEX_FREE(&xstream_data.xd_mutex);
 		/* fall through */
 	case XD_INIT_NONE:
 		if (xstream_data.xd_xs_ptrs != NULL)

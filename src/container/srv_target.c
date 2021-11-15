@@ -743,7 +743,7 @@ out_pool:
 out_cond:
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 out_mutex:
-	ABT_mutex_free(&cont->sc_mutex);
+	DABT_MUTEX_FREE(&cont->sc_mutex);
 out:
 	D_FREE(cont);
 	return rc;
@@ -765,7 +765,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	daos_csummer_destroy(&cont->sc_csummer);
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
-	ABT_mutex_free(&cont->sc_mutex);
+	DABT_MUTEX_FREE(&cont->sc_mutex);
 	D_FREE(cont);
 }
 
@@ -1216,7 +1216,7 @@ cont_child_destroy_one(void *vin)
 
 		ABT_mutex_lock(cont->sc_mutex);
 		if (cont->sc_dtx_resyncing)
-			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
+			DABT_COND_WAIT(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
 		/*
 		 * If this is the last user, ds_cont_child will be removed from

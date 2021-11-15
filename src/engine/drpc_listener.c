@@ -179,25 +179,15 @@ static void
 drpc_listener_stop(void)
 {
 	set_listener_running(false);
+	DABT_THREAD_JOIN(status.thread);
 }
 
 int
 drpc_listener_fini(void)
 {
-	int	rc = 0;
-	int	tmp_rc;
-
 	drpc_listener_stop();
-
 	DABT_THREAD_FREE(&status.thread);
-
-	tmp_rc = ABT_mutex_free(&status.running_mutex);
-	if (tmp_rc != ABT_SUCCESS) {
-		D_ERROR("ABT error freeing mutex: %d\n", tmp_rc);
-		rc = dss_abterr2der(tmp_rc);
-	}
-
+	DABT_MUTEX_FREE(&status.running_mutex);
 	D_FREE(drpc_listener_socket_path);
-
-	return rc;
+	return 0;
 }

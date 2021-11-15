@@ -107,7 +107,7 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
 
 	D_ASSERT(buf->bdb_tot_cnt == 0);
-	ABT_mutex_free(&buf->bdb_mutex);
+	DABT_MUTEX_FREE(&buf->bdb_mutex);
 	ABT_cond_free(&buf->bdb_wait_iods);
 
 	D_FREE(buf);
@@ -136,14 +136,14 @@ dma_buffer_create(unsigned int init_cnt)
 
 	rc = ABT_cond_create(&buf->bdb_wait_iods);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&buf->bdb_mutex);
+		DABT_MUTEX_FREE(&buf->bdb_mutex);
 		D_FREE(buf);
 		return NULL;
 	}
 
 	rc = bulk_cache_create(buf);
 	if (rc != 0) {
-		ABT_mutex_free(&buf->bdb_mutex);
+		DABT_MUTEX_FREE(&buf->bdb_mutex);
 		ABT_cond_free(&buf->bdb_wait_iods);
 		D_FREE(buf);
 		return NULL;
@@ -1036,7 +1036,7 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 	bdb->bdb_active_iods--;
 
 	ABT_mutex_lock(bdb->bdb_mutex);
-	ABT_cond_broadcast(bdb->bdb_wait_iods);
+	DABT_COND_BROADCAST(bdb->bdb_wait_iods);
 	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
@@ -1085,7 +1085,7 @@ retry:
 			biod, retry_cnt++);
 
 		ABT_mutex_lock(bdb->bdb_mutex);
-		ABT_cond_wait(bdb->bdb_wait_iods, bdb->bdb_mutex);
+		DABT_COND_WAIT(bdb->bdb_wait_iods, bdb->bdb_mutex);
 		ABT_mutex_unlock(bdb->bdb_mutex);
 
 		D_DEBUG(DB_IO, "IOD %p finished waiting. %d\n",

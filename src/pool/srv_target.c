@@ -414,7 +414,7 @@ err_done_cond:
 err_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 err_mutex:
-	ABT_mutex_free(&pool->sp_mutex);
+	DABT_MUTEX_FREE(&pool->sp_mutex);
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
@@ -454,7 +454,7 @@ pool_free_ref(struct daos_llink *llink)
 
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
-	ABT_mutex_free(&pool->sp_mutex);
+	DABT_MUTEX_FREE(&pool->sp_mutex);
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE(pool);
 }
@@ -549,7 +549,7 @@ pool_fetch_hdls_ult(void *data)
 	 */
 	ABT_mutex_lock(pool->sp_mutex);
 	if (pool->sp_map == NULL)
-		ABT_cond_wait(pool->sp_fetch_hdls_cond, pool->sp_mutex);
+		DABT_COND_WAIT(pool->sp_fetch_hdls_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	if (pool->sp_stopping) {
@@ -565,7 +565,7 @@ pool_fetch_hdls_ult(void *data)
 
 out:
 	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_signal(pool->sp_fetch_hdls_done_cond);
+	DABT_COND_SIGNAL(pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	pool->sp_fetch_hdls = 0;
@@ -632,11 +632,11 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 	}
 
 	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_signal(pool->sp_fetch_hdls_cond);
+	DABT_COND_SIGNAL(pool->sp_fetch_hdls_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_wait(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
+	DABT_COND_WAIT(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
 	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 }

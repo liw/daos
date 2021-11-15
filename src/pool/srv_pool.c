@@ -754,7 +754,7 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 err_events_cv:
 	ABT_cond_free(&svc->ps_events.pse_cv);
 err_events_mutex:
-	ABT_mutex_free(&svc->ps_events.pse_mutex);
+	DABT_MUTEX_FREE(&svc->ps_events.pse_mutex);
 err_user:
 	rdb_path_fini(&svc->ps_user);
 err_handles:
@@ -809,7 +809,7 @@ queue_event(struct pool_svc *svc, d_rank_t rank, uint64_t incarnation, enum crt_
 
 	ABT_mutex_lock(events->pse_mutex);
 	d_list_add_tail(&event->psv_link, &events->pse_queue);
-	ABT_cond_broadcast(events->pse_cv);
+	DABT_COND_BROADCAST(events->pse_cv);
 	ABT_mutex_unlock(events->pse_mutex);
 	return 0;
 }
@@ -900,7 +900,7 @@ events_handler(void *arg)
 				d_list_del_init(&event->psv_link);
 				break;
 			}
-			ABT_cond_wait(events->pse_cv, events->pse_mutex);
+			DABT_COND_WAIT(events->pse_cv, events->pse_mutex);
 		}
 		ABT_mutex_unlock(events->pse_mutex);
 		if (stop)
@@ -985,7 +985,7 @@ fini_events(struct pool_svc *svc)
 
 	ABT_mutex_lock(events->pse_mutex);
 	events->pse_stop = true;
-	ABT_cond_broadcast(events->pse_cv);
+	DABT_COND_BROADCAST(events->pse_cv);
 	ABT_mutex_unlock(events->pse_mutex);
 
 	DABT_THREAD_FREE(&events->pse_handler);
@@ -999,7 +999,7 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 
 	ds_cont_svc_fini(&svc->ps_cont_svc);
 	ABT_cond_free(&svc->ps_events.pse_cv);
-	ABT_mutex_free(&svc->ps_events.pse_mutex);
+	DABT_MUTEX_FREE(&svc->ps_events.pse_mutex);
 	rdb_path_fini(&svc->ps_user);
 	rdb_path_fini(&svc->ps_handles);
 	rdb_path_fini(&svc->ps_root);
@@ -1887,7 +1887,7 @@ out_tx:
 			D_GOTO(out_svc, rc);
 		}
 		svc->ps_rsvc.s_state = DS_RSVC_UP;
-		ABT_cond_broadcast(svc->ps_rsvc.s_state_cv);
+		DABT_COND_BROADCAST(svc->ps_rsvc.s_state_cv);
 	}
 
 out_mutex:

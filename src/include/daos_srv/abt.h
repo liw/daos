@@ -28,6 +28,38 @@
 		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_thread_free(%p): %d\n", thread, dabt_rc);\
 	} while (0)
 
+#define DABT_MUTEX_FREE(mutex)									\
+	do {											\
+		int dabt_rc;									\
+												\
+		dabt_rc = ABT_mutex_free(mutex);						\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_mutex_free(%p): %d\n", mutex, dabt_rc);	\
+	} while (0)
+
+#define DABT_COND_WAIT(cond, mutex)								\
+	do {											\
+		int dabt_rc;									\
+												\
+		dabt_rc = ABT_cond_wait(cond, mutex);						\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_cond_wait: %d\n", dabt_rc);		\
+	} while (0)
+
+#define DABT_COND_SIGNAL(cond)									\
+	do {											\
+		int dabt_rc;									\
+												\
+		dabt_rc = ABT_cond_signal(cond);						\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_cond_signal: %d\n", dabt_rc);		\
+	} while (0)
+
+#define DABT_COND_BROADCAST(cond)								\
+	do {											\
+		int dabt_rc;									\
+												\
+		dabt_rc = ABT_cond_broadcast(cond);						\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_cond_broadcast: %d\n", dabt_rc);		\
+	} while (0)
+
 #define DABT_EVENTUAL_SET(eventual, value, nbytes)						\
 	do {											\
 		int dabt_rc;									\

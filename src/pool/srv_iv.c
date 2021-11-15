@@ -928,7 +928,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				    v->piv_map.piv_pool_map_ver);
 
 	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_signal(pool->sp_fetch_hdls_cond);
+	DABT_COND_SIGNAL(pool->sp_fetch_hdls_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	ds_pool_put(pool);
