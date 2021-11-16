@@ -2751,7 +2751,7 @@ pool_domain_print(struct pool_domain *domain, int dep)
 {
 	int		i;
 
-	D_PRINT("%*s%s[%d] v%d %s\n", dep * 8, "", pool_domain_name(domain),
+	D_ERROR("%*s%s[%d] v%d %s\n", dep * 8, "", pool_domain_name(domain),
 		domain->do_comp.co_id, domain->do_comp.co_ver,
 		pool_comp_state2str(domain->do_comp.co_status));
 
@@ -2769,7 +2769,7 @@ pool_domain_print(struct pool_domain *domain, int dep)
 		D_ASSERTF(comp->co_type == PO_COMP_TP_TARGET,
 			  "%s\n", pool_comp_type2str(comp->co_type));
 
-		D_PRINT("%*s%s[%d] v%d %s (fseq=%d)\n", (dep + 1) * 8, "",
+		D_ERROR("%*s%s[%d] v%d %s (fseq=%d)\n", (dep + 1) * 8, "",
 			pool_comp_type2str(comp->co_type),
 			comp->co_id, comp->co_ver,
 			pool_comp_state2str(comp->co_status),
@@ -2783,7 +2783,7 @@ pool_domain_print(struct pool_domain *domain, int dep)
 void
 pool_map_print(struct pool_map *map)
 {
-	D_PRINT("Cluster map version %d\n", map->po_version);
+	D_ERROR("Cluster map version %d\n", map->po_version);
 	if (map->po_tree != NULL)
 		pool_domain_print(map->po_tree, 0);
 }

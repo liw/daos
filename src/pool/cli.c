@@ -271,6 +271,7 @@ out_update:
 			pool->dp_map_version_known, map_version);
 		pool->dp_map_version_known = map_version;
 	}
+	pool_map_print(pool->dp_map);
 out:
 	return rc;
 }
@@ -1511,9 +1512,9 @@ create_map_refresh_rpc(struct dc_pool *pool, unsigned int map_version,
 
 	/* Set a timeout shorter than the default one. */
 	rc = crt_req_get_timeout(c, &timeout);
-	D_ASSERTF(rc = 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
+	D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
 	rc = crt_req_set_timeout(c, max(1, timeout / 4));
-	D_ASSERTF(rc = 0, "crt_req_set_timeout: "DF_RC"\n", DP_RC(rc));
+	D_ASSERTF(rc == 0, "crt_req_set_timeout: "DF_RC"\n", DP_RC(rc));
 
 	*rpc = c;
 	*map_buf = b;
