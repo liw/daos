@@ -6,12 +6,34 @@
 /**
  * \file
  *
- * dss_abt: Argobots Helpers
+ * dabt: DAOS Argobots Helpers
  */
 
-#ifndef DAOS_SRV_ABT_H
-#define DAOS_SRV_ABT_H
+#ifndef DAOS_SRV_DABT_H
+#define DAOS_SRV_DABT_H
 
+#define DABT_CALL(func, ...)									\
+	do {											\
+		int dabt_rc;									\
+												\
+		dabt_rc = func(__VA_ARGS__);							\
+		D_ASSERTF(dabt_rc == ABT_SUCCESS, #func": %d\n", dabt_rc);			\
+	} while (0)
+
+#define DABT_THREAD_JOIN(thread)	DABT_CALL(ABT_thread_join, thread)
+#define DABT_THREAD_FREE(thread)	DABT_CALL(ABT_thread_free, thread)
+#define DABT_MUTEX_FREE(mutex)		DABT_CALL(ABT_mutex_free, mutex)
+#define DABT_COND_WAIT(cond, mutex)	DABT_CALL(ABT_cond_wait, cond, mutex)
+#define DABT_COND_SIGNAL(cond)		DABT_CALL(ABT_cond_signal, cond)
+#define DABT_COND_BROADCAST(cond)	DABT_CALL(ABT_cond_broadcast, cond)
+#define DABT_EVENTUAL_SET(eventual, value, nbytes)						\
+					DABT_CALL(ABT_eventual_set, eventual, value, nbytes)
+#define DABT_EVENTUAL_WAIT(eventual, value)							\
+					DABT_CALL(ABT_eventual_wait, eventual, value)
+#define DABT_EVENTUAL_FREE(eventual)	DABT_CALL(ABT_eventual_free, eventual)
+#define DABT_FUTURE_SET(future, value)	DABT_CALL(ABT_future_set, future, value)
+
+#if 0
 #define DABT_THREAD_JOIN(thread)								\
 	do {											\
 		ABT_thread	dabt_thread = (thread);						\
@@ -112,5 +134,6 @@
 		D_ASSERTF(dabt_rc == ABT_SUCCESS, "ABT_future_set(%p): %d\n", dabt_value,	\
 			  dabt_rc);								\
 	} while (0)
+#endif
 
-#endif /* DAOS_SRV_ABT_H */
+#endif /* DAOS_SRV_DABT_H */

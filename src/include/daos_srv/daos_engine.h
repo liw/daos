@@ -18,7 +18,7 @@
 #include <daos/drpc.h>
 #include <daos/rpc.h>
 #include <daos/cont_props.h>
-#include <daos_srv/abt.h>
+#include <daos_srv/dabt.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
