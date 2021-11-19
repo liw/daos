@@ -1,8 +1,3 @@
-ENV:
-  default:
-    - D_LOG_MASK: DEBUG,MEM=ERR
-    - DD_MASK: mgmt,md,dsms,dsmc
-    - DD_SUBSYS: mgmt,pool,rebuild
 hosts:
   servers: !mux
     6_server:

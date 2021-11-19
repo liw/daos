@@ -1631,7 +1631,8 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 
 	crt_rpc_inout_buff_init(rpc_priv);
 
-	rpc_priv->crp_timeout_sec = ctx->cc_timeout_sec;
+	rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
+				     ctx->cc_timeout_sec);
 	rpc_priv->crp_create_hlc = crt_hlc_get();
 
 exit:
