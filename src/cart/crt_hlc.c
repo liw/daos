@@ -28,6 +28,8 @@
 
 static ATOMIC uint64_t crt_hlc;
 
+static __thread uint64_t crt_hlc_logical_max;
+
 /** See crt_hlc_epsilon_set's API doc */
 static uint64_t crt_hlc_epsilon = 1ULL * NSEC_PER_SEC * CRT_HLC_NSEC;
 
@@ -58,6 +60,10 @@ uint64_t crt_hlc_get(void)
 		ret = (hlc & ~CRT_HLC_MASK) < pt ? pt : (hlc + 1);
 	} while (!atomic_compare_exchange(&crt_hlc, hlc, ret));
 
+	hlc = ret & CRT_HLC_MASK;
+	if (crt_hlc_logical_max < hlc)
+		crt_hlc_logical_max = hlc;
+
 	return ret;
 }
 
@@ -87,9 +93,18 @@ int crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset)
 			ret = hlc + 1;
 	} while (!atomic_compare_exchange(&crt_hlc, hlc, ret));
 
+	hlc = ret & CRT_HLC_MASK;
+	if (crt_hlc_logical_max < hlc)
+		crt_hlc_logical_max = hlc;
+
 	if (hlc_out != NULL)
 		*hlc_out = ret;
 	return 0;
+}
+
+uint64_t crt_hlc_get_logical_max(void)
+{
+	return crt_hlc_logical_max;
 }
 
 uint64_t crt_hlc2nsec(uint64_t hlc)

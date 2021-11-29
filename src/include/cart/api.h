@@ -450,6 +450,9 @@ crt_hlc_get(void);
 int
 crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset);
 
+uint64_t
+crt_hlc_get_logical_max(void);
+
 /**
  * Return the nanosecond timestamp of hlc.
  *

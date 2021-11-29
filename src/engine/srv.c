@@ -108,6 +108,7 @@ struct dss_xstream_data {
 	/** Initializing step, it is for cleanup of global states */
 	int			  xd_init_step;
 	int			  xd_ult_init_rc;
+	uint64_t		  xd_hlc_logical_max;
 	bool			  xd_ult_signal;
 	/** total number of XS including system XS, main XS and offload XS */
 	int			  xd_xs_nr;
@@ -322,6 +323,7 @@ dss_srv_handler(void *arg)
 	struct dss_module_info		*dmi;
 	int				 rc;
 	bool				 signal_caller = true;
+	uint64_t			 hlc_logical_max;
 
 	/**
 	 * Set cpu affinity
@@ -524,6 +526,12 @@ signal:
 		ABT_cond_signal(xstream_data.xd_ult_init);
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 	}
+	hlc_logical_max = crt_hlc_get_logical_max();
+	ABT_mutex_lock(xstream_data.xd_mutex);
+	if (xstream_data.xd_hlc_logical_max < hlc_logical_max)
+		xstream_data.xd_hlc_logical_max = hlc_logical_max;
+	ABT_mutex_unlock(xstream_data.xd_mutex);
+	D_CRIT("crt_hlc_logical_max: "DF_X64"\n", hlc_logical_max);
 }
 
 static inline struct dss_xstream *
@@ -797,6 +805,7 @@ dss_xstreams_fini(bool force)
 	xstream_data.xd_xs_nr = 0;
 	dss_tgt_nr = 0;
 
+	D_CRIT("engine crt_hlc_logical_max: "DF_X64"\n", xstream_data.xd_hlc_logical_max);
 	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
