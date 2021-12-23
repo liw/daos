@@ -233,38 +233,38 @@ rdb_raft_add_node(struct rdb *db, d_rank_t rank)
 {
 	struct rdb_raft_node	*dnode;
 	raft_node_t		*node;
-	d_rank_t		 self;
-	int			 rc = 0;
+	d_rank_t		 self = dss_self_rank();
 
 	D_ALLOC_PTR(dnode);
 	if (dnode == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	rc = crt_group_rank(NULL, &self);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+		return -DER_NOMEM;
 	dnode->dn_rank = rank;
+
 	node = raft_add_node(db->d_raft, dnode, rank, (rank == self));
 	if (node == NULL) {
 		D_ERROR(DF_DB": failed to add node %u\n", DP_DB(db), rank);
 		D_FREE(dnode);
-		D_GOTO(out, rc = -DER_NOMEM);
+		return -DER_NOMEM;
 	}
-out:
-	return rc;
+
+	D_DEBUG(DB_MD, DF_DB": added node %u\n", DP_DB(db), rank);
+	return 0;
 }
 
 static int
 rdb_raft_get_nreplicas(struct rdb *db, uint64_t index, uint8_t *nreplicas)
 {
-	d_iov_t		value;
+	d_iov_t	value;
+	int	rc;
 
 	d_iov_set(&value, nreplicas, sizeof(*nreplicas));
-	return rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
-			     &rdb_lc_nreplicas, &value);
+	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS, &rdb_lc_nreplicas, &value);
+	if (rc != 0)
+		D_ERROR(DF_DB": failed to read nreplicas: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+	return rc;
 }
 
-/*
- * Load the replicas in the LC at its base.
- */
+/* Load the replicas in the LC at index. */
 static int
 rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 {
@@ -282,13 +282,10 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 		rc = -DER_NOMEM;
 		goto err;
 	}
-	d_iov_set(&value, db->d_replicas->rl_ranks,
-		  sizeof(*db->d_replicas->rl_ranks) * nreplicas);
-	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
-			   &rdb_lc_replicas, &value);
+	d_iov_set(&value, db->d_replicas->rl_ranks, sizeof(*db->d_replicas->rl_ranks) * nreplicas);
+	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS, &rdb_lc_replicas, &value);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to read replicas: "DF_RC"\n", DP_DB(db),
-			DP_RC(rc));
+		D_ERROR(DF_DB": failed to read replicas: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		goto err_replicas;
 	}
 	return 0;
@@ -309,16 +306,18 @@ rdb_raft_unload_replicas(struct rdb *db)
 		return;
 
 	for (i = 0; i < db->d_replicas->rl_nr; i++) {
+		d_rank_t		rank = db->d_replicas->rl_ranks[i];
 		raft_node_t	       *node;
 		struct rdb_raft_node   *rdb_node;
 
-		node = raft_get_node(db->d_raft, db->d_replicas->rl_ranks[i]);
+		node = raft_get_node(db->d_raft, rank);
 		if (node == NULL)
 			continue;
 		rdb_node = raft_node_get_udata(node);
 		D_ASSERT(rdb_node != NULL);
 		raft_remove_node(db->d_raft, node);
 		D_FREE(rdb_node);
+		D_DEBUG(DB_MD, DF_DB": removed node %u\n", DP_DB(db), rank);
 	}
 
 	d_rank_list_free(db->d_replicas);
@@ -2147,31 +2146,38 @@ rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
 {
 	daos_handle_t		lc;
 	struct rdb_lc_record    record;
-	uint64_t		base;
+	uint64_t		base = 0;
 	int			rc;
 	int			rc_close;
 
-	base = (replicas == NULL || replicas->rl_nr == 0) ? 0 : 1;
+	/*
+	 * Since index 0 must represent an empty snapshot, if an initial
+	 * membership list is given, it must be stored at index 1.
+	 */
+	if (replicas != NULL && replicas->rl_nr > 0)
+		base = 1;
 
-	/* Create log container; base is 1 since we store replicas at idx 1 */
-	rc = rdb_raft_create_lc(pool, mc, &rdb_mc_lc, base, 0 /* base_term */,
-				0 /* term */, &record /* lc_record */);
-	/* Return on failure or if there are no replicas to be stored */
-	if (base == 0 || rc != 0)
+	/* Create the log container. */
+	rc = rdb_raft_create_lc(pool, mc, &rdb_mc_lc, base, 0 /* base_term */, 0 /* term */,
+				&record);
+	if (rc != 0)
 		return rc;
 
-	/* Record the configuration in the LC at index 1. */
-	rc = vos_cont_open(pool, record.dlr_uuid, &lc);
-	/* This really should not be happening.. */
-	D_ASSERTF(rc == 0, "Open VOS container: "DF_RC"\n", DP_RC(rc));
+	/* Return 0 if there are no replicas to be stored. */
+	if (base == 0)
+		return 0;
 
-	/* No initial configuration if rank list empty */
-	rc = rdb_lc_store_replicas(lc, 1 /* base */, replicas);
+	/* Record the configuration in the LC at base. */
+	rc = vos_cont_open(pool, record.dlr_uuid, &lc);
 	if (rc != 0)
-		D_ERROR("failed to create list of replicas: "DF_RC"\n",
-			DP_RC(rc));
+		return rc;
+	rc = rdb_lc_store_replicas(lc, base, replicas);
+	if (rc != 0)
+		D_ERROR("failed to create list of replicas: "DF_RC"\n", DP_RC(rc));
 	rc_close = vos_cont_close(lc);
-	return (rc != 0) ? rc : rc_close;
+	D_ASSERTF(rc_close == 0, "close LC: "DF_RC"\n", DP_RC(rc_close));
+
+	return rc;
 }
 
 static int
@@ -2301,12 +2307,12 @@ lc:
 		goto err_lc;
 	}
 
-	/* Load the LC. */
+	/* Load the LC base. */
 	rc = rdb_raft_load_snapshot(db);
 	if (rc != 0)
 		goto err_lc;
 
-	/* Load the log entries. */
+	/* Load the LC entries. */
 	for (i = db->d_lc_record.dlr_base + 1; i < db->d_lc_record.dlr_tail;
 	     i++) {
 		/*
