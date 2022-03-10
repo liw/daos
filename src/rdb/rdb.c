@@ -124,6 +124,32 @@ rdb_destroy(const char *path, const uuid_t uuid)
 	return rc;
 }
 
+/**
+ * Forcefully remove all other replicas from the membership. Callers must
+ * destroy all other replicas beforehand.
+ *
+ * This API is for catastrophic recovery purposes, for instance, when more than
+ * a minority of replicas are corrupted.
+ *
+ *   1 Select the best replica to recover from.
+ *   2 Destroy all other replicas.
+ *   3 Call rdb_dictate on the selected replica.
+ *   4 Start the selected replica.
+ */
+int
+rdb_dictate(const char *path, const uuid_t uuid)
+{
+	/*
+	 * TODO:
+	 *   1 Append a new "entry" with self-only membership.
+	 *       - nreplicas = 1, replicas = {self ID}
+	 *       - entry_header?
+	 *   2 Poll the log to the new "entry".
+	 *       - Can't have raft load any of the entries.
+	 *       - Must begin with a snapshot.
+	 */
+}
+
 void
 rdb_get(struct rdb *db)
 {

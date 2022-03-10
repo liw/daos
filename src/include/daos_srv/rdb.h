@@ -143,6 +143,7 @@ int rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs,
 	      void *arg, struct rdb **dbp);
 void rdb_stop(struct rdb *db);
 int rdb_destroy(const char *path, const uuid_t uuid);
+int rdb_dictate(const char *path, const uuid_t uuid);
 void rdb_resign(struct rdb *db, uint64_t term);
 int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
