@@ -2505,11 +2505,21 @@ rdb_raft_start(struct rdb *db)
 		goto err_replies_cv;
 	}
 
+	rc = rdb_raft_open_lc(db);
+	if (rc != 0)
+		goto err_compact_cv;
+
+	if (db->d_dictate) {
+		rc = rdb_raft_dictate(db);
+		if (rc != 0)
+			goto err_lc;
+	}
+
 	db->d_raft = raft_new();
 	if (db->d_raft == NULL) {
 		D_ERROR(DF_DB": failed to create raft object\n", DP_DB(db));
 		rc = -DER_NOMEM;
-		goto err_compact_cv;
+		goto err_lc;
 	}
 
 	raft_set_callbacks(db->d_raft, &rdb_raft_cbs, db);
@@ -2527,7 +2537,7 @@ rdb_raft_start(struct rdb *db)
 
 	rc = dss_ult_create(rdb_recvd, db, DSS_XS_SELF, 0, 0, &db->d_recvd);
 	if (rc != 0)
-		goto err_lc;
+		goto err_raft_state;
 	rc = dss_ult_create(rdb_timerd, db, DSS_XS_SELF, 0, 0, &db->d_timerd);
 	if (rc != 0)
 		goto err_recvd;
@@ -2563,10 +2573,12 @@ err_recvd:
 	rc = ABT_thread_join(db->d_recvd);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_recvd);
-err_lc:
+err_raft_state:
 	rdb_raft_unload_lc(db);
 err_raft:
 	raft_free(db->d_raft);
+err_lc:
+	rdb_raft_close_lc(db);
 err_compact_cv:
 	ABT_cond_free(&db->d_compact_cv);
 err_replies_cv:
@@ -2630,6 +2642,7 @@ rdb_raft_stop(struct rdb *db)
 
 	rdb_raft_unload_lc(db);
 	raft_free(db->d_raft);
+	rdb_raft_close_lc(db);
 	ABT_cond_free(&db->d_compact_cv);
 	ABT_cond_free(&db->d_replies_cv);
 	ABT_cond_free(&db->d_events_cv);
