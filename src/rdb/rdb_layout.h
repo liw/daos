@@ -54,7 +54,7 @@
  * consists of updates in Raft log entry 10. Querying epoch 10 will see the
  * snapshot represented by Raft log entry 10.
  *
- * Each container contains a object storing attributes. These objects have
+ * Each container contains an object that stores attributes. These objects have
  * static IDs: RDB_MC_ATTRS for MCs or RDB_LC_ATTRS for LCs. In an LC, we have
  * the following mapping:
  *

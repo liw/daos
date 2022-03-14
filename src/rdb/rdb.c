@@ -124,9 +124,83 @@ rdb_destroy(const char *path, const uuid_t uuid)
 	return rc;
 }
 
+static int
+rdb_raft_poll(uuid_t db, daos_handle_t pool, daos_handle_t mc, daos_handle_t *lc_out)
+{
+	struct rdb_lc_record	lc_record;
+	daos_handle_t		lc;
+	uint64_t		index;
+	struct rdb_entry	header;
+	d_iov_t			value;
+	int			rc;
+
+	/* Look up and open the LC. */
+	d_iov_set(&value, &lc_record, sizeof(lc_record));
+	rc = rdb_mc_lookup(mc, RDB_MC_ATTRS, &rdb_mc_lc, &value);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up LC: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
+		goto err_slc;
+	}
+	rc = vos_cont_open(pool, lc_record.dlr_uuid, &lc);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to open LC "DF_UUID": %d\n", DP_DB(db),
+			DP_UUID(db->d_lc_record.dlr_uuid), rc);
+		goto err_slc;
+	}
+
+	/* Compute the index to poll to. We are polling all entries. */
+	index = lc_record.dlr_tail - 1;
+
+	/* Look up the entry header at the index. */
+	d_iov_set(&value, &header, sizeof(header));
+	rc = rdb_lc_lookup(lc, index, RDB_LC_ATTRS, &rdb_lc_entry_header, &value);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up entry "DF_U64" header: %d\n",
+			DP_DB(db), index, rc);
+		return rc;
+	}
+
+	D_DEBUG(DB_TRACE, DF_DB": polling [%ld, %ld]\n", DP_DB(db), index,
+		index + *n_entries - 1);
+
+	D_ASSERTF(index == db->d_lc_record.dlr_base + 1,
+		  "%ld == "DF_U64" + 1\n", index, db->d_lc_record.dlr_base);
+
+	/* Update the log base index and term. */
+	lc_record.dlr_base = index;
+	lc_record.dlr_base_term = header.dre_term;
+	d_iov_set(&value, &lc_record, sizeof(lc_record));
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to update log base from "DF_U64" to "DF_U64": %d\n",
+			DP_UUID(db), base, lc_record.dlr_base, rc);
+		return rc;
+	}
+
+	*lc_out = lc;
+	return 0;
+}
+
+/* Reset the membership to just myself. */
+static int
+rdb_raft_reset_replicas(daos_handle_t lc, uint64_t index)
+{
+	d_rank_list_t	replicas;
+	d_rank_t	self = dss_self_rank();
+
+	replicas.rl_ranks = &self;
+	replicas.rl_nr = 1;
+
+	return rdb_raft_store_replicas(lc, index, replicas);
+}
+
+static int rdb_open_pool_and_mc(const char *path, const uuid_t uuid, daos_handle_t *pool_out,
+				daos_handle_t *mc_out);
+
 /**
- * Forcefully remove all other replicas from the membership. Callers must
- * destroy all other replicas beforehand.
+ * Forcefully reset the membership (i.e., remove all other replicas). Callers
+ * must destroy all other replicas beforehand for this operation to be safe.
  *
  * This API is for catastrophic recovery purposes, for instance, when more than
  * a minority of replicas are corrupted.
@@ -139,15 +213,100 @@ rdb_destroy(const char *path, const uuid_t uuid)
 int
 rdb_dictate(const char *path, const uuid_t uuid)
 {
+	daos_handle_t		pool;
+	daos_handle_t		mc;
+	daos_handle_t		lc;
+	struct rdb_lc_record	lc_record;
+	uint64_t		index;
+	struct rdb_entry	header;
+	d_rank_list_t		replicas;
+	d_rank_t		self = dss_self_rank();
+	d_iov_t			value;
+	int			rc;
+
+	D_WARN(DF_UUID": forcefully resetting membership in RDB %s\n", DP_UUID(uuid), path);
+
 	/*
-	 * TODO:
-	 *   1 Append a new "entry" with self-only membership.
-	 *       - nreplicas = 1, replicas = {self ID}
-	 *       - entry_header?
-	 *   2 Poll the log to the new "entry".
+	 * TODO: Two PMDK TXs:
+	 *   0 Discard [tail, inf).
+	 *   1 Poll the entire log.
 	 *       - Can't have raft load any of the entries.
 	 *       - Must begin with a snapshot.
+	 *   2 Modify the snapshot with self-only membership.
+	 *       - nreplicas = 1, replicas = {self ID}
+	 *       - entry_header?
 	 */
+
+	rc = rdb_open_pool_and_mc(path, uuid, &pool, &mc);
+	if (rc != 0)
+		goto out;
+
+	/* Look up and open the LC. */
+	d_iov_set(&value, &lc_record, sizeof(lc_record));
+	rc = rdb_mc_lookup(mc, RDB_MC_ATTRS, &rdb_mc_lc, &value);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up LC: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
+		goto out_pool_mc;
+	}
+	rc = vos_cont_open(pool, lc_record.dlr_uuid, &lc);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to open LC "DF_UUID": %d\n", DP_DB(db),
+			DP_UUID(db->d_lc_record.dlr_uuid), rc);
+		goto out_pool_mc;
+	}
+
+	/* Get the index and the term of the last entry. */
+	index = lc_record.dlr_tail - 1;
+	d_iov_set(&value, &header, sizeof(header));
+	rc = rdb_lc_lookup(lc, index, RDB_LC_ATTRS, &rdb_lc_entry_header, &value);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up entry "DF_U64" header: %d\n",
+			DP_DB(db), index, rc);
+		goto out_lc;
+	}
+
+	D_DEBUG(DB_TRACE, DF_DB": polling [%ld, %ld]\n", DP_DB(db), index,
+		index + *n_entries - 1);
+
+	D_ASSERTF(index == db->d_lc_record.dlr_base + 1,
+		  "%ld == "DF_U64" + 1\n", index, db->d_lc_record.dlr_base);
+
+	/*
+	 * Poll the entire log. Note that this modification effectively commits
+	 * and snapshots all entries.
+	 */
+	lc_record.dlr_base = index;
+	lc_record.dlr_base_term = header.dre_term;
+	d_iov_set(&value, &lc_record, sizeof(lc_record));
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to update log base from "DF_U64" to "DF_U64": %d\n",
+			DP_UUID(db), base, lc_record.dlr_base, rc);
+		goto out_lc;
+	}
+
+	/*
+	 * Reset the membership to just ourself. Note that this modification
+	 * breaks Raft's assumptions; all other replicas must be destroyed
+	 * beforehand.
+	 *
+	 * The values of rdb_lc_entry_header and rdb_lc_entry_data are no
+	 * longer relevant, since we have polled all entries.
+	 */
+	replicas.rl_ranks = &self;
+	replicas.rl_nr = 1;
+	rc = rdb_raft_store_replicas(lc, index, replicas);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to reset membership: "DF_RC"\n", DP_RC(rc));
+
+out_lc:
+	vos_cont_close(lc);
+out_pool_mc:
+	vos_cont_close(mc);
+	vos_pool_close(pool);
+out:
+	return rc;
 }
 
 void
@@ -366,18 +525,9 @@ err:
 	return rc;
 }
 
-/**
- * Start an RDB replica at \a path.
- *
- * \param[in]	path	replica path
- * \param[in]	uuid	database UUID
- * \param[in]	cbs	callbacks (not copied)
- * \param[in]	arg	argument for cbs
- * \param[out]	dbp	database
- */
-int
-rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
-	  struct rdb **dbp)
+static int
+rdb_open_pool_and_mc(const char *path, const uuid_t uuid, daos_handle_t *pool_out,
+		     daos_handle_t *mc_out)
 {
 	daos_handle_t		pool;
 	daos_handle_t		mc;
@@ -385,8 +535,6 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	uuid_t			uuid_persist;
 	uint32_t		version;
 	int			rc;
-
-	D_INFO(DF_UUID": starting RDB %s\n", DP_UUID(uuid), path);
 
 	/*
 	 * RDB pools specify VOS_POF_SMALL for basic system memory reservation
@@ -456,6 +604,42 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		rc = -DER_DF_INCOMPT;
 		goto err_mc;
 	}
+
+	*pool_out = pool;
+	*mc_out = mc;
+	return 0;
+
+err_mc:
+	vos_cont_close(mc);
+err_pool:
+	vos_pool_close(pool);
+err:
+	return rc;
+}
+
+/**
+ * Start an RDB replica at \a path.
+ *
+ * \param[in]	path	replica path
+ * \param[in]	uuid	database UUID
+ * \param[in]	cbs	callbacks (not copied)
+ * \param[in]	arg	argument for cbs
+ * \param[out]	dbp	database
+ */
+int
+rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
+	  struct rdb **dbp)
+{
+	daos_handle_t		pool;
+	daos_handle_t		mc;
+	uint32_t		version;
+	int			rc;
+
+	D_INFO(DF_UUID": starting RDB %s\n", DP_UUID(uuid), path);
+
+	rc = rdb_open_pool_and_mc(path, uuid, &pool, &mc);
+	if (rc != 0)
+		goto err;
 
 	rc = rdb_start_internal(pool, mc, uuid, cbs, arg, dbp);
 	if (rc != 0)
