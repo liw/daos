@@ -2236,11 +2236,45 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 	return 0;
 }
 
+static int
+rdb_raft_open_lc(daos_handle_t pool, daos_handle_t mc, daos_handle_t *lc_out)
+{
+	struct rdb_lc_record	lc_record;
+	d_iov_t			value;
+	daos_handle_t		lc;
+	int			rc;
+
+	d_iov_set(&value, &lc_record, sizeof(lc_record));
+	rc = rdb_mc_lookup(mc, RDB_MC_ATTRS, &rdb_mc_lc, &value);
+	if (rc != 0) {
+		D_ERROR("failed to look up LC: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = vos_cont_open(pool, lc_record.dlr_uuid, &lc);
+	if (rc != 0) {
+		D_ERROR("failed to open LC "DF_UUID": "DF_RC"\n", DP_UUID(db->d_lc_record.dlr_uuid),
+			DP_RC(rc));
+		return rc;
+	}
+
+	/* Recover the LC by discarding any partially appended entries. */
+	rc = rdb_lc_discard(lc, lc_record.dlr_tail, RDB_LC_INDEX_MAX);
+	if (rc != 0) {
+		D_ERROR("failed to recover LC "DF_U64": "DF_RC"\n", lc_record.dlr_base, DP_RC(rc));
+		vos_cont_close(lc);
+		return rc;
+	}
+
+	*lc_out = lc;
+	return 0;
+}
+
 /* Load the LC and the SLC (if one exists). */
 static int
 rdb_raft_load_lc(struct rdb *db)
 {
-	d_iov_t	value;
+	d_iov_t		value;
 	uint64_t	i;
 	int		rc;
 
@@ -2268,28 +2302,10 @@ rdb_raft_load_lc(struct rdb *db)
 	}
 
 lc:
-	/* Look up and open the LC. */
-	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_lc, &value);
+	rc = rdb_raft_open_lc(db->d_pool, db->d_mc, &db->d_lc);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up LC: "DF_RC"\n", DP_DB(db),
-			DP_RC(rc));
+		D_ERROR(DF_DB": failed to open LC: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		goto err_slc;
-	}
-	rc = vos_cont_open(db->d_pool, db->d_lc_record.dlr_uuid, &db->d_lc);
-	if (rc != 0) {
-		D_ERROR(DF_DB": failed to open LC "DF_UUID": %d\n", DP_DB(db),
-			DP_UUID(db->d_lc_record.dlr_uuid), rc);
-		goto err_slc;
-	}
-
-	/* Recover the LC by discarding any partially appended entries. */
-	rc = rdb_lc_discard(db->d_lc, db->d_lc_record.dlr_tail,
-			    RDB_LC_INDEX_MAX);
-	if (rc != 0) {
-		D_ERROR(DF_DB": failed to recover LC "DF_U64": %d\n", DP_DB(db),
-			db->d_lc_record.dlr_base, rc);
-		goto err_lc;
 	}
 
 	/* Load the LC base. */
@@ -2298,8 +2314,7 @@ lc:
 		goto err_lc;
 
 	/* Load the log entries. */
-	for (i = db->d_lc_record.dlr_base + 1; i < db->d_lc_record.dlr_tail;
-	     i++) {
+	for (i = db->d_lc_record.dlr_base + 1; i < db->d_lc_record.dlr_tail; i++) {
 		/*
 		 * Yield before loading the first entry (for the rdb_lc_discard
 		 * call above) and every a few entries.

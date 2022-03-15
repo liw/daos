@@ -274,7 +274,7 @@ rdb_dictate(const char *path, const uuid_t uuid)
 
 	/*
 	 * Poll the entire log. Note that this modification effectively commits
-	 * and snapshots all entries.
+	 * and compacts (without aggregating) all entries.
 	 */
 	lc_record.dlr_base = index;
 	lc_record.dlr_base_term = header.dre_term;
