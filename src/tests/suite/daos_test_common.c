@@ -600,7 +600,7 @@ free:
 		d_rank_list_free(arg->pool.alive_svc);
 	D_FREE(arg);
 	*state = NULL;
-	return 0;
+	return rc;
 }
 
 int test_make_dirs(char *dir, mode_t mode)
