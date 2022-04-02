@@ -2567,6 +2567,7 @@ rdb_raft_start(struct rdb *db)
 		goto err;
 	}
 
+	raft_set_nodeid(db->d_raft, dss_self_rank());
 	raft_set_callbacks(db->d_raft, &rdb_raft_cbs, db);
 
 	rc = rdb_raft_load(db);
