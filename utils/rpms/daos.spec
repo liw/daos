@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       25%{?relval}%{?dist}
+Release:       26%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -82,7 +82,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
+BuildRequires: daos-raft-devel = 0.9.0-1405.g25c5f0a%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -539,6 +539,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Apr 06 2022 Li Wei <wei.g.li@intel.com> 2.1.100-26
+- Update raft to 0.9.0-1405.g25c5f0a to fix uninitialized node IDs
+
 * Sat Apr  2 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-25
 - Update to mercury 2.1.0.rc4-8 to include UCX provider patch
 

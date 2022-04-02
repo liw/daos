@@ -1,3 +1,9 @@
+daos (2.1.100-26) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.9.0-1405.g25c5f0a to fix uninitialized node IDs
+
+ -- Li Wei <wei.g.li@intel.com>  Wed, 06 Apr 2022 14:16:00 +0800
+
 daos (2.1.100-25) unstable; urgency=medium
   [ Joseph Moore ]
   * Update mercury to UCX provider patch
