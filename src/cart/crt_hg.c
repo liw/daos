@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -222,6 +222,16 @@ crt_hg_pool_put(struct crt_rpc_priv *rpc_priv)
 	bool			 rc = false;
 
 	D_ASSERT(rpc_priv->crp_hg_hdl != HG_HANDLE_NULL);
+
+	hg_ret = HG_Reset(rpc_priv->crp_hg_hdl, rpc_priv->crp_hg_addr,
+			  0 /* reuse original rpcid */);
+	if (hg_ret != HG_SUCCESS) {
+		rpc_priv->crp_hg_hdl = NULL;
+		RPC_ERROR(rpc_priv,
+			  "HG_Reset failed, hg_ret: %d\n",
+			  hg_ret);
+		D_GOTO(out, rc = -DER_HG);
+	}
 
 	if (rpc_priv->crp_hdl_reuse == NULL) {
 		D_ALLOC_PTR(hdl);
