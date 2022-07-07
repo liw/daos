@@ -1,4 +1,5 @@
 """Build rdb"""
+from tty import CFLAG
 import daos_build
 
 def scons():
@@ -32,6 +33,10 @@ def scons():
     # tests
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
+    denv.AppendUnique(LIBPATH=[Dir('.')])
+    denv.AppendUnique(CCFLAGS=['-Wl,--unresolved-symbols=ignore-all'])
+    daos_build.program(denv, 'rdb_util_test', 'rdb_util_test.c', LIBS=['gurt', 'rdb'])
 
 if __name__ == "SCons.Script":
     scons()
