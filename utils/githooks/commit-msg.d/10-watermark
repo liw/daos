@@ -1,5 +1,5 @@
 #!/bin/bash
 
-if ! grep 'Required-githooks: true' "$1"; then
-    echo 'Required-githooks: true' >> "$1"
+if grep -q '[[:alpha:]]' "$1"; then
+    git interpret-trailers --trailer 'Required-githooks=true' --where start --if-exists doNothing --in-place "$1"
 fi
