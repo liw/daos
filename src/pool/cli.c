@@ -1784,6 +1784,9 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		goto out;
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_POOL_FAIL_MAP_REFRESH_SERIOUSLY))
+		out->tmo_op.po_rc = -DER_NO_HDL;
+
 	rc = out->tmo_op.po_rc;
 	if (rc == -DER_TRUNC) {
 		/*
