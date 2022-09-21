@@ -758,7 +758,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 				D_DEBUG(DB_MGMT,
 					DF_UUID": tgt_create thread canceled\n",
 					DP_UUID(tc_in->tc_pool_uuid));
-				rc = -DER_CANCELED;
+				rc = -DER_OP_CANCELED;
 			} else {
 				D_DEBUG(DB_MGMT,
 					DF_UUID": tgt_create thread finished\n",
@@ -919,7 +919,7 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 				D_DEBUG(DB_MGMT,
 					DF_UUID": tgt_destroy_cleanup thread "
 					"canceled\n", DP_UUID(pool_uuid));
-				rc = -DER_CANCELED;
+				rc = -DER_OP_CANCELED;
 			} else {
 				D_DEBUG(DB_MGMT,
 					DF_UUID": tgt_destroy_cleanup thread "

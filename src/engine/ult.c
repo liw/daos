@@ -112,7 +112,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	if (dss_tgt_nr == 0) {
 		/* May happen when the server is shutting down. */
 		D_DEBUG(DB_TRACE, "no xstreams\n");
-		return -DER_CANCELED;
+		return -DER_OP_CANCELED;
 	}
 
 	xs_nr = dss_tgt_nr;

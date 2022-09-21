@@ -2786,7 +2786,7 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)
 		DP_DB(db), index);
 	for (;;) {
 		if (db->d_stop) {
-			rc = -DER_CANCELED;
+			rc = -DER_OP_CANCELED;
 			break;
 		}
 		if (term != raft_get_current_term(db->d_raft) ||
@@ -2853,7 +2853,7 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	if (db == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	if (db->d_stop)
-		D_GOTO(out_db, rc = -DER_CANCELED);
+		D_GOTO(out_db, rc = -DER_OP_CANCELED);
 
 	D_DEBUG(DB_TRACE, DF_DB": handling raft rv%s from rank %u\n",
 		DP_DB(db), s, srcrank);
@@ -2900,7 +2900,7 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	if (db == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	if (db->d_stop)
-		D_GOTO(out_db, rc = -DER_CANCELED);
+		D_GOTO(out_db, rc = -DER_OP_CANCELED);
 
 	D_DEBUG(DB_TRACE, DF_DB": handling raft ae from rank %u\n", DP_DB(db),
 		srcrank);
@@ -2948,7 +2948,7 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 	if (db->d_stop) {
-		rc = -DER_CANCELED;
+		rc = -DER_OP_CANCELED;
 		goto out_db;
 	}
 

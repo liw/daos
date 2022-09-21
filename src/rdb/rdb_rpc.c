@@ -360,7 +360,7 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db)
 
 	if (db->d_stop) {
 		rdb_free_raft_rpc(rrpc);
-		return -DER_CANCELED;
+		return -DER_OP_CANCELED;
 	}
 
 	ABT_mutex_lock(db->d_mutex);

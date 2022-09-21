@@ -2266,7 +2266,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	if (svc->ps_rsvc.s_stop) {
 		D_DEBUG(DB_MD, DF_UUID": pool service already stopping\n",
 			DP_UUID(svc->ps_uuid));
-		D_GOTO(out_mutex, rc = -DER_CANCELED);
+		D_GOTO(out_mutex, rc = -DER_OP_CANCELED);
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, RDB_NIL_TERM, &tx);

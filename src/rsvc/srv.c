@@ -761,7 +761,7 @@ ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid)
 		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name,
 			svc->s_stop);
 		if (svc->s_stop)
-			rc = -DER_CANCELED;
+			rc = -DER_OP_CANCELED;
 		else
 			rc = -DER_ALREADY;
 		ds_rsvc_put(svc);
@@ -843,7 +843,7 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
  * \param[in]	arg		argument for cbs.sc_bootstrap
  *
  * \retval -DER_ALREADY		replicated service already started
- * \retval -DER_CANCELED	replicated service stopping
+ * \retval -DER_OP_CANCELED	replicated service stopping
  */
 int
 ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
@@ -861,7 +861,7 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name,
 			svc->s_stop);
 		if (svc->s_stop)
-			rc = -DER_CANCELED;
+			rc = -DER_OP_CANCELED;
 		else
 			rc = -DER_ALREADY;
 		ds_rsvc_put(svc);
@@ -899,7 +899,7 @@ stop(struct ds_rsvc *svc, bool destroy)
 	if (svc->s_stop) {
 		ABT_mutex_unlock(svc->s_mutex);
 		D_DEBUG(DB_MD, "%s: stopping already\n", svc->s_name);
-		return -DER_CANCELED;
+		return -DER_OP_CANCELED;
 	}
 	svc->s_stop = true;
 	D_DEBUG(DB_MD, "%s: stopping\n", svc->s_name);
@@ -933,7 +933,7 @@ stop(struct ds_rsvc *svc, bool destroy)
  * \param[in]	destroy		whether to destroy the replica after stopping
  *
  * \retval -DER_ALREADY		replicated service already stopped
- * \retval -DER_CANCELED	replicated service stopping
+ * \retval -DER_OP_CANCELED	replicated service stopping
  */
 int
 ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)

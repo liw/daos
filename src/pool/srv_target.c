@@ -548,7 +548,7 @@ pool_free_ref(struct daos_llink *llink)
 	D_DEBUG(DB_MGMT, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
 	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0);
-	if (rc == -DER_CANCELED)
+	if (rc == -DER_OP_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
 	else if (rc != 0)
 		D_ERROR(DF_UUID": failed to delete ES pool caches: "DF_RC"\n",
@@ -1018,7 +1018,7 @@ static int
 pool_hdl_add(struct ds_pool_hdl *hdl)
 {
 	if (dss_srv_shutting_down())
-		return -DER_CANCELED;
+		return -DER_OP_CANCELED;
 
 	return d_hash_rec_insert(pool_hdl_hash, hdl->sph_uuid,
 				 sizeof(uuid_t), &hdl->sph_entry,

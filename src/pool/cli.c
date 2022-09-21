@@ -2137,7 +2137,7 @@ dc_pool_abandon_map_refresh_task(tse_task_t *task)
 
 	d_backoff_seq_fini(&arg->mra_backoff_seq);
 	dc_pool_put(arg->mra_pool);
-	tse_task_complete(task, -DER_CANCELED);
+	tse_task_complete(task, -DER_OP_CANCELED);
 }
 
 struct pool_lc_arg {
