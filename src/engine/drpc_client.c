@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -168,7 +168,10 @@ drpc_notify_ready(void)
 	if (rc != 0)
 		goto out;
 	rc = crt_self_incarnation_get(&incarnation);
-	if (rc != 0)
+	if (rc == -DER_UNINIT)
+		/* A hack for CRT_SWIM_ENABLE=0. */
+		incarnation = dss_get_start_epoch();
+	else if (rc != 0)
 		goto out_uri;
 
 	req.incarnation = incarnation;

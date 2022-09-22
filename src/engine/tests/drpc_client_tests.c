@@ -55,6 +55,12 @@ crt_self_incarnation_get(uint64_t *incarnation)
 	return 0;
 }
 
+uint64_t
+dss_get_start_epoch(void)
+{
+	return crt_self_incarnation_get_incarnation;
+}
+
 static uint32_t	mock_self_rank = 1;
 int
 crt_group_rank(crt_group_t *grp, d_rank_t *rank)

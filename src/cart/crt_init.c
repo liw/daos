@@ -326,6 +326,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	int		max_num_ctx = 256;
 	uint32_t	ctx_num;
 	bool		share_addr;
+	bool		swim = true;
 	int		rc = 0;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
@@ -379,8 +380,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		d_srand(seed);
 
 		crt_gdata.cg_server = server;
-		crt_gdata.cg_auto_swim_disable =
-			(flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;
+
+		d_getenv_bool("CRT_SWIM_ENABLE", &swim);
+		if (flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE)
+			swim = false;
+		crt_gdata.cg_auto_swim_disable = swim ? 0 : 1;
 
 		D_DEBUG(DB_ALL, "Server bit set to %d\n", server);
 		D_DEBUG(DB_ALL, "Swim auto disable set to %d\n",
