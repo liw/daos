@@ -3373,12 +3373,8 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	uint32_t			*idx_to_check;
 	uint32_t			n_idx_to_check;
 	d_rank_t			rank;
-	int				i, k, cb_idx;
+	int				i, k;
 	int				rc = 0;
-	crt_event_cb			cb_func;
-	void				*cb_args;
-	struct crt_event_cb_priv	*cbs_event;
-	size_t				cbs_size;
 
 	grp_priv = crt_grp_pub2priv(grp);
 
@@ -3417,9 +3413,6 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
-	cbs_size = crt_plugin_gdata.cpg_event_size;
-	cbs_event = crt_plugin_gdata.cpg_event_cbs;
-
 	/* Add ranks based on idx_to_add list */
 	for (i = 0; i < n_idx_to_add; i++) {
 		uint32_t	idx = idx_to_add[i];
@@ -3442,14 +3435,21 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 				D_GOTO(cleanup, rc);
 		}
 
-		/* Notify about members being added */
-		for (cb_idx = 0; cb_idx < cbs_size; cb_idx++) {
-			cb_func = cbs_event[cb_idx].cecp_func;
-			cb_args = cbs_event[cb_idx].cecp_args;
-
-			if (cb_func != NULL)
-				cb_func(rank, incarnation, CRT_EVS_GRPMOD, CRT_EVT_ALIVE, cb_args);
+		/*
+		 * The epi entries for this rank may already exist and marked
+		 * as being dead.
+		 * 
+		 * TODO: Handle -DER_BUSY.
+		 */
+		rc = crt_rank_epi_op(rank, CRT_RANK_EPI_MARK_ALIVE);
+		if (rc != 0) {
+			D_ERROR("Failed to mark rank %u as being alive: "DF_RC"\n", rank,
+				DP_RC(rc));
+			D_GOTO(cleanup, rc);
 		}
+
+		/* Notify about members being added */
+		crt_trigger_event_cbs(rank, incarnation, CRT_EVS_GRPMOD, CRT_EVT_ALIVE);
 	}
 
 	/* Remove ranks based on to_remove list */
@@ -3463,14 +3463,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 		}
 
 		/* Notify about members being removed */
-		for (cb_idx = 0; cb_idx < cbs_size; cb_idx++) {
-			cb_func = cbs_event[cb_idx].cecp_func;
-			cb_args = cbs_event[cb_idx].cecp_args;
-
-			if (cb_func != NULL)
-				cb_func(rank, CRT_NO_INCARNATION, CRT_EVS_GRPMOD, CRT_EVT_DEAD,
-					cb_args);
-		}
+		crt_trigger_event_cbs(rank, CRT_NO_INCARNATION, CRT_EVS_GRPMOD, CRT_EVT_DEAD);
 
 		/* Remove rank from swim tracking */
 		crt_swim_rank_del(grp_priv, rank);

@@ -880,11 +880,7 @@ static void
 crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state_prev,
 			   struct swim_member_state *state)
 {
-	struct crt_event_cb_priv *cbs_event;
-	crt_event_cb		 cb_func;
-	void			*cb_args;
-	enum crt_event_type	 cb_type;
-	size_t			 i, cbs_size;
+	enum crt_event_type cb_type;
 
 	D_ASSERT(state_prev != NULL);
 	D_ASSERT(state != NULL);
@@ -893,28 +889,37 @@ crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state_prev,
 		SWIM_STATUS_CHARS[state_prev->sms_status], SWIM_STATUS_CHARS[state->sms_status],
 		state_prev->sms_incarnation, state->sms_incarnation);
 
+	/*
+	 * If the rank has become DEAD, mark corresponding epi objects and
+	 * abort corresponding inflight RPCs, to avoid waiting out RPC
+	 * timeouts.
+	 *
+	 * If the rank is INACTIVE or ALIVE, we mark corresponding epi objects
+	 * but make no attempt to abort RPCs, because we currently can't
+	 * determine whether the rank has restarted or just cleared a
+	 * suspicion. We may improve this in the future, perhaps by clearing
+	 * suspicions with only lower incarnation bits.
+	 *
+	 * Ignore the return values from the two crt_rank_epi_op calls; the
+	 * function logs errors.
+	 */
 	switch (state->sms_status) {
 	case SWIM_MEMBER_ALIVE:
+		crt_rank_epi_op(rank, CRT_RANK_EPI_MARK_ALIVE);
 		cb_type = CRT_EVT_ALIVE;
 		break;
 	case SWIM_MEMBER_DEAD:
+		crt_rank_epi_op(rank, CRT_RANK_EPI_MARK_DEAD_ABORT);
 		cb_type = CRT_EVT_DEAD;
 		break;
+	case SWIM_MEMBER_INACTIVE:
+		crt_rank_epi_op(rank, CRT_RANK_EPI_MARK_ALIVE);
+		return;
 	default:
 		return;
 	}
 
-	/* walk the global list to execute the user callbacks */
-	cbs_size = crt_plugin_gdata.cpg_event_size;
-	cbs_event = crt_plugin_gdata.cpg_event_cbs;
-
-	for (i = 0; i < cbs_size; i++) {
-		cb_func = cbs_event[i].cecp_func;
-		cb_args = cbs_event[i].cecp_args;
-		/* check for and execute event callbacks here */
-		if (cb_func != NULL)
-			cb_func(rank, state->sms_incarnation, CRT_EVS_SWIM, cb_type, cb_args);
-	}
+	crt_trigger_event_cbs(rank, state->sms_incarnation, CRT_EVS_SWIM, cb_type);
 }
 
 static int crt_swim_get_member_state(struct swim_context *ctx,
