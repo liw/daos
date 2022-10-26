@@ -528,10 +528,6 @@ testu_rank_sets_belong(d_rank_list_t *x, d_rank_t *y_ranks, int y_ranks_len)
 static struct pool_map *
 testu_create_pool_map(d_rank_t *ranks, int n_ranks, d_rank_t *down_ranks, int n_down_ranks)
 {
-	d_rank_list_t		ranks_list = {
-		.rl_ranks	= ranks,
-		.rl_nr		= n_ranks
-	};
 	struct pool_buf	       *map_buf;
 	struct pool_map	       *map;
 	uint32_t	       *domains;
@@ -549,8 +545,7 @@ testu_create_pool_map(d_rank_t *ranks, int n_ranks, d_rank_t *down_ranks, int n_
 		domains[3 + i] = i;
 
 	rc = gen_pool_buf(NULL /* map */, &map_buf, 1 /* map_version */, n_domains,
-			  n_ranks, n_ranks * 1 /* ntargets */, domains, &ranks_list,
-			  1 /* dss_tgt_nr */);
+			  n_ranks, n_ranks * 1 /* ntargets */, domains, 1 /* dss_tgt_nr */);
 	D_ASSERT(rc == 0);
 
 	rc = pool_map_create(map_buf, 1, &map);
@@ -813,6 +808,22 @@ ds_pool_test_plan_svc_reconfs(void)
 		D_ASSERT(to_remove->rl_nr == 3);
 		D_ASSERT(testu_rank_sets_belong(to_remove, expected_to_remove_candidates,
 						ARRAY_SIZE(expected_to_remove_candidates)));
+
+		call_d_rank_list_free
+	}
+
+	/* A PS leader refuses to remove itself (for now). */
+	{
+		int		svc_rf = 1;
+		d_rank_t	ranks[] = {0, 1, 2, 3, 4};
+		d_rank_t	down_ranks[] = {0};
+		d_rank_t	replicas_ranks[] = {0, 1, 2};
+
+		/* Note that self == 0 and rank 0 is undesired. */
+		call_testu_plan_svc_reconfs
+
+		D_ASSERT(to_add->rl_nr == 0);
+		D_ASSERT(to_remove->rl_nr == 0);
 
 		call_d_rank_list_free
 	}
