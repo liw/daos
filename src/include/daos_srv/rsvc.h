@@ -113,6 +113,7 @@ struct ds_rsvc {
 	int			s_leader_ref;	/* on leader state */
 	ABT_cond		s_leader_ref_cv;
 	bool			s_map_dist;	/* has a map dist request? */
+	bool			s_map_dist_ongoing; /* is a map dist ongoing? */
 	ABT_cond		s_map_dist_cv;
 	ABT_thread		s_map_distd;
 	bool			s_map_distd_stop;
@@ -166,5 +167,6 @@ int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 size_t ds_rsvc_get_md_cap(void);
 
 void ds_rsvc_request_map_dist(struct ds_rsvc *svc);
+int ds_rsvc_await_map_dist(struct ds_rsvc *svc);
 
 #endif /* DAOS_SRV_RSVC_H */

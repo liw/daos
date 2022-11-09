@@ -7025,3 +7025,23 @@ ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_s
 
 	return target->ta_comp.co_status == matched_status ? 1 : 0;
 }
+
+/**
+ * Await any pending or ongoing map distribution for pool service leader \a
+ * uuid. See ds_rsvc_await_map_dist for more details.
+ */
+int
+ds_pool_svc_await_map_dist(uuid_t uuid)
+{
+	struct pool_svc	       *svc;
+	int			rc;
+
+	rc = pool_svc_lookup_leader(uuid, &svc, NULL /* hint */);
+	if (rc != 0)
+		return rc;
+
+	rc = ds_rsvc_await_map_dist(&svc->ps_rsvc);
+
+	pool_svc_put_leader(svc);
+	return rc;
+}

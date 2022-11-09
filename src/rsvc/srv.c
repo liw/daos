@@ -78,6 +78,7 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	D_ASSERT(svc->s_id.iov_buf_len >= svc->s_id.iov_len);
 	uuid_copy(svc->s_db_uuid, db_uuid);
 	svc->s_state = DS_RSVC_DOWN;
+	svc->s_map_distd == ABT_THREAD_NULL;
 
 	rc = rsvc_class(class)->sc_name(&svc->s_id, &svc->s_name);
 	if (rc != 0)
@@ -141,6 +142,7 @@ err:
 static void
 fini_free(struct ds_rsvc *svc)
 {
+	D_ASSERT(svc->s_map_distd == ABT_THREAD_NULL);
 	D_ASSERT(d_list_empty(&svc->s_entry));
 	D_ASSERTF(svc->s_ref == 0, "%d\n", svc->s_ref);
 	D_ASSERTF(svc->s_leader_ref == 0, "%d\n", svc->s_leader_ref);
@@ -401,7 +403,10 @@ init_map_distd(struct ds_rsvc *svc)
 {
 	int rc;
 
+	D_ASSERT(svc->s_map_distd == ABT_THREAD_NULL);
+
 	svc->s_map_dist = false;
+	svc->s_map_dist_ongoing = false;
 	svc->s_map_distd_stop = false;
 
 	ds_rsvc_get(svc);
@@ -421,6 +426,7 @@ init_map_distd(struct ds_rsvc *svc)
 static void
 drain_map_distd(struct ds_rsvc *svc)
 {
+	D_ASSERT(svc->s_map_distd != ABT_THREAD_NULL);
 	svc->s_map_distd_stop = true;
 	ABT_cond_broadcast(svc->s_map_dist_cv);
 }
@@ -428,10 +434,7 @@ drain_map_distd(struct ds_rsvc *svc)
 static void
 fini_map_distd(struct ds_rsvc *svc)
 {
-	int rc;
-
-	rc = ABT_thread_join(svc->s_map_distd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+	D_ASSERT(svc->s_map_distd != ABT_THREAD_NULL);
 	ABT_thread_free(&svc->s_map_distd);
 }
 
@@ -619,7 +622,9 @@ map_distd(void *arg)
 			if (stop)
 				break;
 			if (svc->s_map_dist) {
+				/* Consume the request and mark it ongoing. */
 				svc->s_map_dist = false;
+				svc->s_map_dist_ongoing = true;
 				break;
 			}
 			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
@@ -628,6 +633,7 @@ map_distd(void *arg)
 		if (stop)
 			break;
 		rc = rsvc_class(svc->s_class)->sc_map_dist(svc);
+		svc->s_map_dist_ongoing = false;
 		if (rc != 0) {
 			/*
 			 * Try again, but back off a little bit to limit the
@@ -646,14 +652,53 @@ map_distd(void *arg)
  * Request an asynchronous map distribution. This eventually triggers
  * ds_rsvc_class.sc_map_dist, which must be implemented by the rsvc class.
  *
- * \param[in]	svc	replicated service
+ * \param[in]	svc	replicated service (must be a leader reference)
  */
 void
 ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 {
+	D_ASSERT(svc->s_map_distd != ABT_THREAD_NULL);
 	svc->s_map_dist = true;
 	ABT_cond_broadcast(svc->s_map_dist_cv);
 	D_DEBUG(DB_MD, "%s: requested map distribution\n", svc->s_name);
+}
+
+/**
+ * Await any pending or ongoing map distribution to succeed. If there is no
+ * pending or ongoing map distribution, this function returns zero immediately.
+ * If the service leader steps down during the wait, this function returns
+ * -DER_NOTLEADER.
+ *
+ * \param[in]	svc	replicated service (must be a leader reference)
+ *
+ * \retval	-DER_NOTLEADER	stepping down
+ */
+int
+ds_rsvc_await_map_dist(struct ds_rsvc *svc)
+{
+	bool	stop;
+	int	rc;
+
+	D_ASSERT(svc->s_map_distd != ABT_THREAD_NULL);
+	D_DEBUG(DB_MD, "%s: await map distribution: begin\n", svc->s_name);
+
+	ABT_mutex_lock(svc->s_mutex);
+	for (;;) {
+		stop = svc->s_map_distd_stop;
+		if (stop)
+			break;
+		if (!svc->s_map_dist && !svc->s_map_dist_ongoing)
+			break;
+		sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+	}
+	ABT_mutex_unlock(svc->s_mutex);
+	if (stop)
+		rc = -DER_NOTLEADER;
+	else
+		rc = 0;
+
+	D_DEBUG(DB_MD, "%s: await map distribution: end: "DF_RC"\n", svc->s_name, DP_RC(rc));
+	return rc;
 }
 
 static bool

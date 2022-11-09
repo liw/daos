@@ -241,6 +241,7 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 			     uuid_t *cont_hdl_uuid);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
+int ds_pool_svc_await_map_dist(uuid_t uuid);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
