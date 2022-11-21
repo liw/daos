@@ -25,14 +25,23 @@ extern "C" {
 
 #include <daos_security.h>
 
-/** Opens the container for reading only. This flag conflicts with DAOS_COO_RW. */
+/**
+ * Opens the container for reading only. This flag conflicts with DAOS_COO_RW
+ * and DAOS_COO_EX.
+ */
 #define DAOS_COO_RO		(1U << 0)
 
-/** Opens the container for reading and writing. This flag conflicts with DAOS_COO_RO. */
+/**
+ * Opens the container for reading and writing. This flag conflicts with
+ * DAOS_COO_RO and DAOS_COO_EX.
+ */
 #define DAOS_COO_RW		(1U << 1)
 
-/** Disables the automatic epoch slip at epoch commit time. See daos_epoch_commit(). */
-#define DAOS_COO_NOSLIP		(1U << 2)
+/**
+ * Opens the container for reading and writing exclusively. This flag conflicts
+ * with DAOS_COO_RO and DAOS_COO_RW.
+ */
+#define DAOS_COO_EX		(1U << 2)
 
 /** Skips the check to see if the pool meets the redundancy factor/level requirements of the
  * container.
