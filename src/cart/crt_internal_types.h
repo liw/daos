@@ -190,12 +190,14 @@ struct crt_context {
 	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
 
-	/** RPC tracking */
+	/** RPC and abort task tracking */
 	/** in-flight endpoint tracking hash table */
 	struct d_hash_table	 cc_epi_table;
 	/** binheap for inflight RPC timeout tracking */
 	struct d_binheap	 cc_bh_timeout;
-	/** mutex to protect cc_epi_table and timeout binheap */
+	/** queue of abort tasks */
+	d_list_t		 cc_abort_tasks;
+	/** mutex to protect cc_epi_table, cc_bh_timeout, and cc_task_queue */
 	pthread_mutex_t		 cc_mutex;
 
 	/** timeout per-context */
@@ -238,6 +240,24 @@ struct crt_ep_inflight {
 
 	/* mutex to protect ei_req_q and some counters */
 	pthread_mutex_t		 epi_mutex;
+};
+
+/* Type of an abort task */
+enum crt_abort_type {
+	/* Abort all RPCs to a rank */
+	CRT_ABORT_RANK,
+	/* Abort a specific RPC */
+	CRT_ABORT_RPC
+};
+
+/* An abort task */
+struct crt_abort {
+	d_list_t		 ca_link;
+	enum crt_abort_type	 ca_type;
+	union {
+		d_rank_t	 ca_rank;
+		crt_rpc_t	*ca_rpc;
+	};
 };
 
 #define CRT_UNLOCK			(0)

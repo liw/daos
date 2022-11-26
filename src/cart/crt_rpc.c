@@ -1492,17 +1492,9 @@ out:
 }
 
 int
-crt_req_abort(crt_rpc_t *req)
+crt_req_abort_internal(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_rpc_priv	*rpc_priv;
-	int			 rc = 0;
-
-	if (req == NULL) {
-		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	int rc = 0;
 
 	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
 	    rpc_priv->crp_state == RPC_STATE_COMPLETED) {
@@ -1528,6 +1520,25 @@ crt_req_abort(crt_rpc_t *req)
 		crt_rpc_complete(rpc_priv, rc);
 		D_GOTO(out, rc);
 	}
+
+out:
+	return rc;
+}
+
+int
+crt_req_abort(crt_rpc_t *req)
+{
+	struct crt_rpc_priv	*rpc_priv;
+	int			 rc = 0;
+
+	if (req == NULL) {
+		D_ERROR("invalid parameter (NULL req).\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+
+	rc = crt_context_abort_task_create(req->cr_ctx, CRT_ABORT_RPC, rpc_priv);
 
 out:
 	return rc;

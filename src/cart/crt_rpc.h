@@ -642,6 +642,7 @@ int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 int crt_internal_rpc_register(bool server);
 int crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 int crt_req_send_internal(struct crt_rpc_priv *rpc_priv);
+int crt_req_abort_internal(struct crt_rpc_priv *rpc_priv);
 
 static inline bool
 crt_req_timedout(struct crt_rpc_priv *rpc_priv)

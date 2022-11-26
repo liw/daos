@@ -142,6 +142,7 @@ crt_context_init(crt_context_t crt_ctx)
 		D_GOTO(out, rc);
 
 	D_INIT_LIST_HEAD(&ctx->cc_link);
+	D_INIT_LIST_HEAD(&ctx->cc_task_queue);
 
 	/* create timeout binheap */
 	bh_node_cnt = CRT_DEFAULT_CREDITS_PER_EP_CTX * 64;
@@ -564,10 +565,9 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 			msg_logged = true;
 		}
 
-		rc = crt_req_abort(&rpc_priv->crp_pub);
+		rc = crt_req_abort_internal(rpc_priv);
 		if (rc != 0) {
-			D_DEBUG(DB_NET,
-				"crt_req_abort(opc: %#x) failed, rc: %d.\n",
+			D_DEBUG(DB_NET, "crt_req_abort_internal(opc: %#x) failed, rc: %d.\n",
 				rpc_priv->crp_pub.cr_opc, rc);
 			rc = 0;
 			continue;
@@ -677,6 +677,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
+
+	while (!d_list_empty(&ctx->cc_task_queue)) {
+		/* TODO: Discard a task. */
+	}
 
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
@@ -828,6 +832,34 @@ out:
 	return rc2;
 }
 
+int
+crt_context_abort_rpc_task_create(struct crt_context *ctx, struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_abort_task	*task;
+
+	D_ALLOC_PTR(task);
+	if (task == NULL)
+		return -DER_NOMEM;
+
+	task->ca_type = CRT_ABORT_RPC;
+	RPC_ADDREF(rpc_priv);
+	task->ca_rpc = rpc_priv;
+
+	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+	d_list_add_tail(&task->ca_link, &crt_ctx->cc_abort_tasks);
+	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+
+	return 0;
+}
+
+void
+crt_context_abort_task_free(struct crt_abort_task)
+{
+	if (task->ca_type == CRT_ABORT_RPC)
+		RPC_DECREF(task->ca_rpc);
+	D_FREE(task);
+}
+
 /* caller should already hold crt_ctx->cc_mutex */
 int
 crt_req_timeout_track(struct crt_rpc_priv *rpc_priv)
@@ -926,25 +958,28 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 static inline void
 crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_context		*crt_ctx;
-	struct crt_grp_priv		*grp_priv;
-	crt_endpoint_t			*tgt_ep;
-	crt_rpc_t			*ul_req;
-	struct crt_uri_lookup_in	*ul_in;
-	int				 rc;
+	struct crt_context *crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	if (crt_req_timeout_reset(rpc_priv)) {
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "reached timeout. Renewed for another cycle.\n");
+		RPC_TRACE(DB_NET, rpc_priv, "reached timeout. Renewed for another cycle.\n");
 		return;
 	};
 
-	tgt_ep = &rpc_priv->crp_pub.cr_ep;
-	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
-	crt_ctx = rpc_priv->crp_pub.cr_ctx;
-
 	if (crt_gdata.cg_use_sensors)
 		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
+
+	crt_context_abort_rpc(rpc_priv, true /* for_timeout */);
+}
+
+static void
+crt_context_abort_rpc(struct crt_rpc_priv *rpc_priv, bool for_timeout)
+{
+	struct crt_context		*crt_ctx = rpc_priv->crp_pub.cr_ctx;
+	crt_endpoint_t			*tgt_ep = &rpc_priv->crp_pub.cr_ep;
+	struct crt_grp_priv		*grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
+	crt_rpc_t			*ul_req;
+	struct crt_uri_lookup_in	*ul_in;
+	int				 rc;
 
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_URI_LOOKUP:
@@ -953,17 +988,16 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		ul_in = crt_req_get(ul_req);
 		RPC_ERROR(rpc_priv,
 			  "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
-			  "rank %d through PSR %d timedout\n",
+			  "rank %d through PSR %d: %s\n",
 			  container_of(ul_req, struct crt_rpc_priv, crp_pub),
-			  ul_in->ul_grp_id,
-			  ul_in->ul_rank,
-			  ul_req->cr_ep.ep_rank);
+			  ul_in->ul_grp_id, ul_in->ul_rank, ul_req->cr_ep.ep_rank,
+			  for_timeout ? "timed out" : "aborted");
 
-		if (crt_gdata.cg_use_sensors)
+		if (for_timeout && crt_gdata.cg_use_sensors)
 			d_tm_inc_counter(crt_ctx->cc_timedout_uri, 1);
-		crt_req_abort(ul_req);
+		crt_req_abort_internal(container_of(ul_req, struct crt_rpc_priv, crp_pub));
 		/*
-		 * don't crt_rpc_complete rpc_priv here, because crt_req_abort
+		 * don't crt_rpc_complete rpc_priv here, because crt_req_abort_internal
 		 * above will lead to ul_req's completion callback --
 		 * crt_req_uri_lookup_by_rpc_cb() be called inside there will
 		 * complete this rpc_priv.
@@ -972,12 +1006,12 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
 		RPC_ERROR(rpc_priv,
-			  "failed due to ADDR_LOOKUP to group %s, rank %d, tgt_uri %s timedout\n",
-			  grp_priv->gp_pub.cg_grpid,
-			  tgt_ep->ep_rank,
-			  rpc_priv->crp_tgt_uri);
+			  "failed due to ADDR_LOOKUP to group %s, rank %d, tgt_uri %s: %s\n"
+			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri,
+			  for_timeout ? "timed out" : "aborted");
 		if (crt_gdata.cg_use_sensors)
 			d_tm_inc_counter(crt_ctx->cc_failed_addr, 1);
+		/* TODO: Requires cc_mutex? */
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;
@@ -987,6 +1021,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  grp_priv->gp_pub.cg_grpid,
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
+		/* TODO: Requires cc_mutex? */
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;
@@ -999,28 +1034,33 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 				  "aborting to group %s, rank %d, tgt_uri %s\n",
 				  grp_priv->gp_pub.cg_grpid,
 				  tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
-			rc = crt_req_abort(&rpc_priv->crp_pub);
+			rc = crt_req_abort_internal(rpc_priv);
 			if (rc)
+				/* TODO: Requires cc_mutex? */
 				crt_context_req_untrack(rpc_priv);
 		}
 		break;
 	}
 }
 
+/* Also processes abort tasks. */
 static void
 crt_context_timeout_check(struct crt_context *crt_ctx)
 {
 	struct crt_rpc_priv		*rpc_priv;
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
+	d_list_t			 abort_list;
 	uint64_t			 ts_now;
 
 	D_ASSERT(crt_ctx != NULL);
 
 	D_INIT_LIST_HEAD(&timeout_list);
+	D_INIT_LIST_HEAD(&abort_list);
 	ts_now = d_timeus_secdiff(0);
 
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+
 	while (1) {
 		bh_node = d_binheap_root(&crt_ctx->cc_bh_timeout);
 		if (bh_node == NULL)
@@ -1036,23 +1076,50 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
 	};
+
+	while (!d_list_empty(&crt_ctx->cc_abort_tasks)) {
+		struct crt_abort *task;
+
+		task = d_list_entry(crt_ctx->cc_abort_tasks.next, struct crt_abort, ca_link);
+		d_list_del(&task->ca_link);
+		if (task->ca_type == CRT_ABORT_RANK) {
+			D_DEBUG(DB_TRACE, "process abort-rank task %p: rank=%u\n", task,
+				task->ca_rank);
+			/* TODO */
+		} else if (task->ca_type == CRT_ABORT_RPC) {
+			D_DEBUG(DB_TRACE, "process abort-RPC task %p: rpc=%p\n", task,
+				task->ca_rpc);
+			rpc_priv = task->ca_rpc;
+			if (d_list_empty(&rpc_priv->crp_tmp_link)) {
+				/* This RPC is not in timeout_list. */
+				/* TODO: Take an rpc_priv reference? */
+				crt_req_timeout_untrack(rpc_priv);
+				d_list_add_tail(&rpc_priv->crp_tmp_link, &abort_list);
+			}
+		} else {
+			D_ERROR("ctx_id %d: unknown abort task type: %d\n", crt_ctx->cc_idx,
+				task->ca_type);
+		}
+		crt_context_abort_task_free(task);
+	}
+
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* handle the timeout RPCs */
-	while ((rpc_priv = d_list_pop_entry(&timeout_list,
-					    struct crt_rpc_priv,
-					    crp_tmp_link))) {
-		RPC_ERROR(rpc_priv,
-			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
-			  "target (%d:%d)\n",
-			  crt_ctx->cc_idx,
-			  rpc_priv->crp_state,
-			  rpc_priv->crp_timeout_sec,
-			  rpc_priv->crp_pub.cr_ep.ep_rank,
-			  rpc_priv->crp_pub.cr_ep.ep_tag);
+	while ((rpc_priv = d_list_pop_entry(&timeout_list, struct crt_rpc_priv, crp_tmp_link))) {
+		RPC_ERROR(rpc_priv, "ctx_id %d, (status: %#x) timed out (%d seconds)\n",
+			  crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec);
 
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
+	}
+
+	while ((rpc_priv = d_list_pop_entry(&abort_list, struct crt_rpc_priv, crp_tmp_link))) {
+		RPC_ERROR(rpc_priv, "ctx_id %d, (status: %#x) aborted\n", crt_ctx->cc_idx,
+			  rpc_priv->crp_state);
+
+		crt_context_abort_rpc(rpc_priv, false /* for_timeout */);
+		RPC_DECREF(rpc_priv); /* TODO: Correct? */
 	}
 }
 
