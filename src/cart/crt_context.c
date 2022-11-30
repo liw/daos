@@ -960,6 +960,11 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_context *crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
+	if (crt_rpc_completed(rpc_priv)) {
+		RPC_TRACE(DB_NET, rpc_priv, "already being completed\n");
+		return;
+	}
+
 	if (crt_req_timeout_reset(rpc_priv)) {
 		RPC_TRACE(DB_NET, rpc_priv, "reached timeout. Renewed for another cycle.\n");
 		return;
@@ -968,11 +973,12 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	if (crt_gdata.cg_use_sensors)
 		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
 
-	crt_context_abort_rpc(rpc_priv, true /* for_timeout */);
+	crt_context_rpc_abort(rpc_priv, true /* for_timeout */);
 }
 
+/* The caller must have already called crt_rpc_completed on rpc_priv. */
 static void
-crt_context_abort_rpc(struct crt_rpc_priv *rpc_priv, bool for_timeout)
+crt_context_rpc_abort(struct crt_rpc_priv *rpc_priv, bool for_timeout)
 {
 	struct crt_context		*crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	crt_endpoint_t			*tgt_ep = &rpc_priv->crp_pub.cr_ep;
@@ -1011,7 +1017,6 @@ crt_context_abort_rpc(struct crt_rpc_priv *rpc_priv, bool for_timeout)
 			  for_timeout ? "timed out" : "aborted");
 		if (crt_gdata.cg_use_sensors)
 			d_tm_inc_counter(crt_ctx->cc_failed_addr, 1);
-		/* TODO: Requires cc_mutex? */
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;
@@ -1021,7 +1026,6 @@ crt_context_abort_rpc(struct crt_rpc_priv *rpc_priv, bool for_timeout)
 			  grp_priv->gp_pub.cg_grpid,
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
-		/* TODO: Requires cc_mutex? */
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;
@@ -1043,7 +1047,6 @@ crt_context_abort_rpc(struct crt_rpc_priv *rpc_priv, bool for_timeout)
 	}
 }
 
-/* Also processes abort tasks. */
 static void
 crt_context_timeout_check(struct crt_context *crt_ctx)
 {
@@ -1077,19 +1080,20 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
 	};
 
-	while (!d_list_empty(&crt_ctx->cc_abort_tasks)) {
-		struct crt_abort *task;
+	while (!d_list_empty(&crt_ctx->cc_context_tasks)) {
+		struct crt_context_task *task;
 
 		task = d_list_entry(crt_ctx->cc_abort_tasks.next, struct crt_abort, ca_link);
-		d_list_del(&task->ca_link);
-		if (task->ca_type == CRT_ABORT_RANK) {
+		d_list_del_init(&task->ca_link);
+		if (task->ca_type == CRT_CONTEXT_ABORT_RANK) {
 			D_DEBUG(DB_TRACE, "process abort-rank task %p: rank=%u\n", task,
 				task->ca_rank);
 			/* TODO */
-		} else if (task->ca_type == CRT_ABORT_RPC) {
+		} else if (task->ca_type == CRT_CONTEXT_ABORT_RPC) {
 			D_DEBUG(DB_TRACE, "process abort-RPC task %p: rpc=%p\n", task,
 				task->ca_rpc);
 			rpc_priv = task->ca_rpc;
+			task->ca_rpc = NULL;
 			if (d_list_empty(&rpc_priv->crp_tmp_link)) {
 				/* This RPC is not in timeout_list. */
 				/* TODO: Take an rpc_priv reference? */
@@ -1097,7 +1101,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 				d_list_add_tail(&rpc_priv->crp_tmp_link, &abort_list);
 			}
 		} else {
-			D_ERROR("ctx_id %d: unknown abort task type: %d\n", crt_ctx->cc_idx,
+			D_ERROR("ctx_id %d: unknown context task type: %d\n", crt_ctx->cc_idx,
 				task->ca_type);
 		}
 		crt_context_abort_task_free(task);
@@ -1118,7 +1122,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		RPC_ERROR(rpc_priv, "ctx_id %d, (status: %#x) aborted\n", crt_ctx->cc_idx,
 			  rpc_priv->crp_state);
 
-		crt_context_abort_rpc(rpc_priv, false /* for_timeout */);
+		crt_context_rpc_abort(rpc_priv, false /* for_timeout */);
 		RPC_DECREF(rpc_priv); /* TODO: Correct? */
 	}
 }

@@ -1538,6 +1538,11 @@ crt_req_abort(crt_rpc_t *req)
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
+	if (crt_rpc_completed(rpc_priv)) {
+		RPC_TRACE(DB_NET, rpc_priv, "already being completed\n");
+		D_GOTO(out, rc = -DER_ALREADY);
+	}
+
 	rc = crt_context_abort_task_create(req->cr_ctx, CRT_ABORT_RPC, rpc_priv);
 
 out:
