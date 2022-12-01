@@ -1318,9 +1318,23 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	} else {
+		D_SPIN_LOCK(&rpc_priv->crp_lock);
+		if (rpc_priv->crp_pending_abort) {
+			/* The RPC was aborted before HG_Forward completed. */
+			if (rpc_priv->crp_completed) {
+				D_SPIN_UNLOCK(&rpc_priv->crp_lock);
+			} else {
+				rpc_priv->crp_completed = 1;
+				D_SPIN_UNLOCK(&rpc_priv->crp_lock);
+				rc = crt_hg_req_cancel(rpc_priv);
+			}
+			D_GOTO(out, rc);
+		}
 		rpc_priv->crp_on_wire = 1;
+		D_SPIN_UNLOCK(&rpc_priv->crp_lock);
 	}
 
+out:
 	RPC_DECREF(rpc_priv);
 
 	return rc;
