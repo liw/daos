@@ -39,7 +39,10 @@ crt_context_t crt_context_lookup_locked(int ctx_idx);
 void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
 int crt_req_timeout_track(struct crt_rpc_priv *rpc_priv);
 void crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv);
+void crt_req_timeout_hdlr_internal(struct crt_rpc_priv *rpc_priv);
 void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
+void crt_req_abort_internal(struct crt_rpc_priv *rpc_priv, bool for_timeout);
+void crt_rpc_complete_internal(struct crt_rpc_priv *rpc_priv, int rc);
 
 enum crt_rank_epi_op_type {
 	CRT_RANK_EPI_MARK_ALIVE,

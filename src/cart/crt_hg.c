@@ -1198,7 +1198,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	rpc_pub = &rpc_priv->crp_pub;
 	if (crt_rpc_completed(rpc_priv)) {
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
-		return rc;
+		return 0;
 	}
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "entered, hg_cbinfo->ret %d.\n", hg_cbinfo->ret);
