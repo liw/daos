@@ -1020,17 +1020,6 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		/* crt_rpc_complete_and_unlock(rpc_priv, -DER_PROTO); */
 		crt_rpc_unlock(rpc_priv);
 		break;
-	case RPC_STATE_ADDR_LOOKUP:
-		RPC_ERROR(rpc_priv,
-			  "failed due to ADDR_LOOKUP to group %s, rank %d, tgt_uri %s timedout\n",
-			  grp_priv->gp_pub.cg_grpid,
-			  tgt_ep->ep_rank,
-			  rpc_priv->crp_tgt_uri);
-		if (crt_gdata.cg_use_sensors)
-			d_tm_inc_counter(crt_ctx->cc_failed_addr, 1);
-		crt_context_req_untrack(rpc_priv);
-		crt_rpc_complete_and_unlock(rpc_priv, -DER_UNREACH);
-		break;
 	case RPC_STATE_FWD_UNREACH:
 		RPC_ERROR(rpc_priv,
 			  "failed due to group %s, rank %d, tgt_uri %s can't reach the target\n",
@@ -1260,7 +1249,6 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 		 rpc_priv->crp_state == RPC_STATE_QUEUED ||
 		 rpc_priv->crp_state == RPC_STATE_COMPLETED ||
 		 rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
-		 rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
 		 rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
 		 rpc_priv->crp_state == RPC_STATE_CANCELED ||
 		 rpc_priv->crp_state == RPC_STATE_FWD_UNREACH);
