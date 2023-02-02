@@ -899,9 +899,6 @@ crt_finalize(void)
 		if (crt_plugin_gdata.cpg_inited == 1)
 			crt_plugin_fini();
 
-		if (crt_is_service() && crt_gdata.cg_swim_inited)
-			crt_swim_fini();
-
 		crt_grp_fini();
 
 		rc = crt_hg_fini();

@@ -468,21 +468,16 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 
 /* abort the RPCs in inflight queue and waitq in the epi. */
 static int
-crt_ctx_epi_abort(d_list_t *rlink, void *arg)
+crt_ctx_epi_abort(struct crt_ep_inflight *epi, int flags)
 {
-	struct crt_ep_inflight	*epi;
 	struct crt_context	*ctx;
 	struct crt_rpc_priv	*rpc_priv, *rpc_next;
 	struct d_vec_pointers	 rpcs;
 	bool			 msg_logged;
-	int			 flags, force, wait;
+	int			 force, wait;
 	uint64_t		 ts_start, ts_now;
 	int			 i;
 	int			 rc = 0;
-
-	D_ASSERT(rlink != NULL);
-	D_ASSERT(arg != NULL);
-	epi = epi_link2ptr(rlink);
 
 	rc = d_vec_pointers_init(&rpcs, 8 /* cap */);
 	if (rc != 0)
@@ -503,7 +498,6 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	    d_list_empty(&epi->epi_req_q))
 		D_GOTO(out_mutex, rc = 0);
 
-	flags = *(int *)arg;
 	force = flags & CRT_EPI_ABORT_FORCE;
 	wait = flags & CRT_EPI_ABORT_WAIT;
 	if (force == 0) {
@@ -580,9 +574,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 			wait = 0;
 		} else {
 			D_MUTEX_UNLOCK(&epi->epi_mutex);
-			D_MUTEX_UNLOCK(&ctx->cc_mutex);
 			rc = crt_progress(ctx, 1);
-			D_MUTEX_LOCK(&ctx->cc_mutex);
 			D_MUTEX_LOCK(&epi->epi_mutex);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("crt_progress failed, rc %d.\n", rc);
@@ -646,11 +638,25 @@ crt_context_free(struct crt_context *ctx)
 	D_FREE(ctx);
 }
 
+static int
+crt_context_epis_append(d_list_t *rlink, void *arg)
+{
+	struct d_vec_pointers	*epis = arg;
+	struct crt_ep_inflight	*epi = epi_link2ptr(rlink);
+	int			 rc;
+
+	d_hash_rec_addref(&epi->epi_ctx->cc_epi_table, rlink);
+	rc = d_vec_pointers_append(epis, epi);
+	if (rc != 0)
+		d_hash_rec_decref(&epi->epi_ctx->cc_epi_table, rlink);
+	return rc;
+}
+
 int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
-	struct crt_context	*ctx;
-	uint32_t		 timeout_sec;
+	struct crt_context	*ctx = crt_ctx;
+	struct d_vec_pointers	 epis;
 	int			 flags;
 	int			 rc = 0;
 	int			 i;
@@ -659,12 +665,19 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_ERROR("invalid parameter (NULL crt_ctx).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
-	ctx = crt_ctx;
+	if (crt_is_service() && ctx->cc_idx == crt_gdata.cg_swim_crt_idx) {
+		D_DEBUG(DB_TRACE, "finalizing SWIM\n");
+		D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+		crt_swim_fini();
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+	}
+
 	rc = crt_grp_ctx_invalid(ctx, false /* locked */);
 	if (rc) {
 		D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n", rc);
@@ -672,43 +685,44 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			D_GOTO(out, rc);
 	}
 
-	timeout_sec = crt_swim_rpc_timeout();
-	flags = force ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
-	D_MUTEX_LOCK(&ctx->cc_mutex);
-	for (i = 0; i < CRT_SWIM_FLUSH_ATTEMPTS; i++) {
-		rc = d_hash_table_traverse(&ctx->cc_epi_table,
-					   crt_ctx_epi_abort, &flags);
-		if (rc == 0)
-			break; /* ready to destroy */
+	rc = d_vec_pointers_init(&epis, 16 /* cap */);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
-		D_MUTEX_UNLOCK(&ctx->cc_mutex);
+	D_MUTEX_LOCK(&ctx->cc_mutex);
+	rc = d_hash_table_traverse(&ctx->cc_epi_table, crt_context_epis_append, &epis);
+	D_MUTEX_UNLOCK(&ctx->cc_mutex);
+	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "destroy context (idx %d, force %d), "
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
-		if (i > 5)
-			D_ERROR("destroy context (idx %d, force %d) "
-				"takes too long time. This is attempt %d of %d.\n",
-				ctx->cc_idx, force, i, CRT_SWIM_FLUSH_ATTEMPTS);
-		/* Flush SWIM RPC already sent */
-		rc = crt_context_flush(crt_ctx, timeout_sec);
-		if (rc)
-			/* give a chance to other threads to complete */
-			usleep(1000); /* 1ms */
-		D_MUTEX_LOCK(&ctx->cc_mutex);
+		D_GOTO(out_epis, rc);
 	}
 
-	if (!force && rc && i == CRT_SWIM_FLUSH_ATTEMPTS)
-		D_GOTO(err_unlock, rc);
+	flags = force ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
 
-	D_MUTEX_UNLOCK(&ctx->cc_mutex);
+	for (i = 0; i < epis.p_len; i++) {
+		struct crt_ep_inflight *epi = epis.p_buf[i];
+
+		rc = crt_ctx_epi_abort(epi, flags);
+		if (rc != 0)
+			D_GOTO(out_epis, rc);
+	}
+
+	rc = crt_context_flush(crt_ctx, 1 /* timeout (s) */);
+	if (rc)
+		D_GOTO(out_epis, rc);
 
 	CTX_DECREF(ctx);
 
-out:
-	return rc;
+out_epis:
+	for (i = 0; i < epis.p_len; i++) {
+		struct crt_ep_inflight *epi = epis.p_buf[i];
 
-err_unlock:
-	D_MUTEX_UNLOCK(&ctx->cc_mutex);
+		d_hash_rec_decref(&ctx->cc_epi_table, &epi->epi_link);
+	}
+	d_vec_pointers_fini(&epis);
+out:
 	return rc;
 }
 
@@ -802,7 +816,7 @@ crt_rank_abort(d_rank_t rank)
 	for (i = 0; i < epis.p_len; i++) {
 		epi = epis.p_buf[i];
 		flags = CRT_EPI_ABORT_FORCE;
-		rc = crt_ctx_epi_abort(&epi->epi_link, &flags);
+		rc = crt_ctx_epi_abort(epi, flags);
 		if (rc != 0) {
 			D_ERROR("context (idx %d), ep_abort (rank %d), failed rc: %d.\n",
 				epi->epi_ctx->cc_idx, rank, rc);
