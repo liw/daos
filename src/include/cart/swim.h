@@ -72,7 +72,8 @@ struct swim_ops {
 			    size_t nupds);
 
 	/**
-	 * Send a SWIM reply to other group member.
+	 * Send a SWIM reply to other group member. The user may release the
+	 * resource \a args points to if applicable.
 	 *
 	 * @param[in]  ctx	SWIM context pointer from swim_init()
 	 * @param[in]  from	IDs of target from IREQ received
@@ -83,6 +84,13 @@ struct swim_ops {
 	 */
 	int (*send_reply)(struct swim_context *ctx, swim_id_t from,
 			  swim_id_t to, int rc, void *args);
+
+	/**
+	 * Skip a SWIM reply to other group member. Called instead of the \a
+	 * send_reply callback when a reply is unnecessary so that the user may
+	 * release the resource \a args points to if applicable.
+	 */
+	void (*skip_reply)(struct swim_context *ctx, swim_id_t from, swim_id_t to, void *args);
 
 	/**
 	 * Retrieve a (non-dead) random group member from the group

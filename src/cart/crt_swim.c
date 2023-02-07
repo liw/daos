@@ -796,6 +796,17 @@ static int crt_swim_send_reply(struct swim_context *ctx, swim_id_t from,
 	return rc;
 }
 
+static void crt_swim_skip_reply(struct swim_context *ctx, swim_id_t from, swim_id_t to, void *args)
+{
+	crt_rpc_t		*rpc = args;
+	struct crt_rpc_priv	*rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	swim_id_t		 self_id = swim_self_get(ctx);
+
+	RPC_TRACE(DB_NET, rpc_priv, "skip %s. %lu: %lu => %lu\n",
+		  SWIM_RPC_TYPE_STR[SWIM_RPC_IREQ], self_id, from, to);
+	RPC_DECREF(rpc_priv);
+}
+
 static swim_id_t crt_swim_get_dping_target(struct swim_context *ctx)
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
@@ -1075,6 +1086,7 @@ void crt_swim_fini(void)
 static struct swim_ops crt_swim_ops = {
 	.send_request     = &crt_swim_send_request,
 	.send_reply       = &crt_swim_send_reply,
+	.skip_reply       = &crt_swim_skip_reply,
 	.get_dping_target = &crt_swim_get_dping_target,
 	.get_iping_target = &crt_swim_get_iping_target,
 	.get_member_state = &crt_swim_get_member_state,

@@ -758,6 +758,8 @@ swim_fini(struct swim_context *ctx)
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
 		TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
+		if (ctx->sc_ops->skip_reply != NULL)
+			ctx->sc_ops->skip_reply(ctx, item->si_id, item->si_from, item->si_args);
 		D_FREE(item);
 		item = next;
 	}
