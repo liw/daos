@@ -870,6 +870,8 @@ ds_pool_stop_all_containers(struct ds_pool *pool)
 	return rc;
 }
 
+static void pool_hdl_debug(struct ds_pool *pool);
+
 /*
  * Stop a pool. Must be called on the system xstream. Release the ds_pool
  * object reference held by ds_pool_start. Only for mgmt and pool modules.
@@ -900,6 +902,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
 	ds_migrate_stop(pool, -1, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
+	pool_hdl_debug(pool);
 	ds_pool_put(pool);
 	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
 }
@@ -992,6 +995,33 @@ ds_pool_hdl_hash_fini(void)
 {
 	d_hash_table_destroy(pool_hdl_hash, true /* force */);
 }
+
+#if 1
+static int
+pool_hdl_debug_cb(d_list_t *link, void *arg)
+{
+	struct ds_pool	       *pool = arg;
+	struct ds_pool_hdl     *hdl = pool_hdl_obj(link);
+
+	if (hdl->sph_pool != pool)
+		return 0;
+
+	D_WARN(DF_UUID": %p: uuid="DF_UUID": flags="DF_X64" sec_capas="DF_X64" ref=%d\n",
+	       DP_UUID(pool->sp_uuid), hdl, DP_UUID(hdl->sph_uuid), hdl->sph_flags,
+	       hdl->sph_sec_capas, hdl->sph_ref);
+
+	return 0;
+}
+
+static void
+pool_hdl_debug(struct ds_pool *pool)
+{
+	int rc;
+
+	rc = d_hash_table_traverse(pool_hdl_hash, pool_hdl_debug_cb, pool);
+	D_ASSERTF(rc == 0, "rc: %d\n", rc);
+}
+#endif
 
 static int
 pool_hdl_delete_all_cb(d_list_t *link, void *arg)
