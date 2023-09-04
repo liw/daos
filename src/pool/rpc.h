@@ -183,7 +183,8 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 	((daos_prop_t)		(pri_prop)		CRT_PTR) \
 	((uint32_t)		(pri_ndomains)		CRT_VAR) \
 	((uint32_t)		(pri_ntgts)		CRT_VAR) \
-	((uint32_t)		(pri_domains)		CRT_ARRAY)
+	((uint32_t)		(pri_domains)		CRT_ARRAY) \
+	((uint32_t)		(pri_campaign)		CRT_VAR)
 
 #define DAOS_OSEQ_POOL_CREATE	/* output fields */		 \
 	((struct pool_op_out)	(pro_op)		CRT_VAR)

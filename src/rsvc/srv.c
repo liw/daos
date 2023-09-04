@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -659,6 +659,7 @@ ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 	D_DEBUG(DB_MD, "%s: requested map distribution\n", svc->s_name);
 }
 
+#if 0
 static bool
 nominated(d_rank_list_t *replicas, uuid_t db_uuid)
 {
@@ -680,6 +681,7 @@ nominated(d_rank_list_t *replicas, uuid_t db_uuid)
 
 	return (replicas->rl_ranks[i] == dss_self_rank());
 }
+#endif
 
 static bool
 self_only(d_rank_list_t *replicas)
@@ -713,6 +715,7 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term, b
 	if (rc != 0)
 		goto err_storage;
 
+#if 0
 	/*
 	 * If creating a replica with an initial membership, we are
 	 * bootstrapping the DB (via sc_bootstrap or an external mechanism). If
@@ -726,6 +729,7 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term, b
 		if (rc != 0)
 			goto err_db;
 	}
+#endif
 
 	if (create && self_only(replicas) &&
 	    rsvc_class(class)->sc_bootstrap != NULL) {
