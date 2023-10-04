@@ -1384,3 +1384,56 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 
 	return -DER_TIMEDOUT;
 }
+
+/**
+ * If this is client rank 0, set fail_loc to \a value on \a engine_rank. The
+ * caller must call clear_fail_loc correpsondingly, even when using
+ * DAOS_FAIL_ONCE.
+ * 
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all engines)
+ * \param[in]	value		value of fail_loc, which must include one of DAOS_FAIL_ONCE,
+ *				DAOS_FAIL_SOME, or DAOS_FAIL_ALWAYS)
+ */
+void
+test_set_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t value)
+{
+	int rc;
+
+	assert((value & (DAOS_FAIL_ONCE | DAOS_FAIL_SOME | DAOS_FAIL_ALWAYS)) != 0);
+
+	if (arg->myrank != 0)
+		return;
+
+	if (engine_rank == CRT_NO_RANK)
+		print_message("setting fail_loc to " DF_X64 " on all engine ranks\n", value);
+	else
+		print_message("setting fail_loc to " DF_X64 " on engine rank %u\n", value,
+			      engine_rank);
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_LOC, value, 0, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+/**
+ * If this is client rank 0, clear fail_loc on \a engine_rank.
+ * 
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all engines)
+ */
+void
+test_clear_fail_loc(test_arg_t *arg, d_rank_t engine_rank)
+{
+	int rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (engine_rank == CRT_NO_RANK)
+		print_message("clearing fail_loc on all engine ranks\n");
+	else
+		print_message("clearing fail_loc on engine rank %u\n", engine_rank);
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	assert_rc_equal(rc, 0);
+}
