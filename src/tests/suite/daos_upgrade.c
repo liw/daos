@@ -34,15 +34,8 @@ upgrade_ec_parity_rotate(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	if (arg->myrank == 0) {
-		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-					   DAOS_FAIL_POOL_CREATE_VERSION | DAOS_FAIL_ALWAYS,
-					   0, NULL);
-		assert_rc_equal(rc, 0);
-		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
-					   0, 0, 0);
-		assert_rc_equal(rc, 0);
-	}
+	test_set_fail_loc(arg, CRT_NO_RANK, DAOS_FAIL_POOL_CREATE_VERSION | DAOS_FAIL_ALWAYS);
+	test_set_fail_value(arg, CRT_NO_RANK, 0);
 
 	/* create/connect another pool */
 	rc = test_setup((void **)&new_arg, SETUP_CONT_CONNECT, arg->multi_rank,
@@ -59,12 +52,7 @@ upgrade_ec_parity_rotate(void **state)
 
 	rebuild_io(new_arg, oids, OBJ_NR);
 
-	if (arg->myrank == 0) {
-		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-					   DAOS_FORCE_OBJ_UPGRADE | DAOS_FAIL_ALWAYS,
-					   0, NULL);
-		assert_rc_equal(rc, 0);
-	}
+	test_set_fail_loc(arg, CRT_NO_RANK, DAOS_FORCE_OBJ_UPGRADE | DAOS_FAIL_ALWAYS);
 
 	rc = daos_pool_upgrade(new_arg->pool.pool_uuid);
 	assert_rc_equal(rc, 0);
@@ -77,14 +65,8 @@ upgrade_ec_parity_rotate(void **state)
 	rebuild_io_validate(new_arg, oids, OBJ_NR);
 	ioreq_fini(&req);
 
-	if (arg->myrank == 0) {
-		rc = daos_debug_set_params(new_arg->group, -1, DMG_KEY_FAIL_LOC, 0,
-					   0, NULL);
-		assert_rc_equal(rc, 0);
-		rc = daos_debug_set_params(new_arg->group, -1, DMG_KEY_FAIL_VALUE,
-					   0, 0, 0);
-		assert_rc_equal(rc, 0);
-	}
+	test_set_fail_loc(arg, CRT_NO_RANK, 0);
+	test_set_fail_value(arg, CRT_NO_RANK, 0);
 
 	test_teardown((void **)&new_arg);
 }
