@@ -608,7 +608,7 @@ pool_properties(void **state)
 		fail_msg("scrubber threshold verification failed.\n");
 	}
 
-	test_clear_fail_loc(arg, CRT_NO_RANK);
+	test_set_fail_loc(arg, CRT_NO_RANK, 0);
 	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop);
@@ -664,7 +664,7 @@ pool_op_retry(void **state)
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
-	test_clear_fail_loc(arg, CRT_NO_RANK);
+	test_set_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
 static int

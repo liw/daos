@@ -672,7 +672,8 @@ out:
 	return rc;
 }
 
-void test_set_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t value);
-void test_clear_fail_loc(test_arg_t *arg, d_rank_t engine_rank);
+void test_set_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
+void test_set_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
+void test_set_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
 
 #endif

@@ -376,14 +376,14 @@ pool_create_and_destroy_retry(void **state)
 			     arg->pool.svc /* svc */, uuid);
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
-	test_clear_fail_loc(arg, CRT_NO_RANK);
 
 	test_set_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE);
 	print_message("destroying pool synchronously ... ");
 	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
-	test_clear_fail_loc(arg, CRT_NO_RANK);
+
+	test_set_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
 static void
@@ -464,7 +464,7 @@ pool_create_steps_down_from_up_empty(void **state)
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
-	test_clear_fail_loc(arg, CRT_NO_RANK);
+	test_set_fail_loc(arg, CRT_NO_RANK, 0);
 
 	print_message("destroying pool synchronously ... ");
 	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
