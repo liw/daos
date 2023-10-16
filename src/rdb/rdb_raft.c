@@ -1165,7 +1165,9 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 			goto err;
 		}
 	} else {
-		D_ASSERTF(0, "Unknown entry type %d\n", entry->type);
+		D_ERROR(DF_DB": unknown entry "DF_U64" type: %d\n", DP_DB(db), index, entry->type);
+		rc = -DER_IO;
+		goto err;
 	}
 
 	/*
@@ -1388,18 +1390,34 @@ rdb_raft_cb_notify_membership_event(raft_server_t *raft, void *udata, raft_node_
 }
 
 static void
-rdb_raft_cb_debug(raft_server_t *raft, raft_node_t *node, void *arg,
+rdb_raft_cb_debug(raft_server_t *raft, raft_node_t *node, void *arg, raft_loglevel_e level,
 		  const char *buf)
 {
-	struct rdb *db = raft_get_udata(raft);
+	struct rdb     *db = raft_get_udata(raft);
+	d_rank_t	rank = CRT_NO_RANK;
 
 	if (node != NULL) {
 		struct rdb_raft_node *rdb_node = raft_node_get_udata(node);
 
-		D_DEBUG(DB_TRACE, DF_DB": %s: rank=%u\n", DP_DB(db), buf,
-			rdb_node->dn_rank);
-	} else {
-		D_DEBUG(DB_TRACE, DF_DB": %s\n", DP_DB(db), buf);
+		rank = rdb_node->dn_rank;
+	}
+
+	switch (level) {
+	case RAFT_LOG_ERROR:
+		D_ERROR(DF_DB": %s: rank=%u\n", DP_DB(db), buf, rank);
+		break;
+	case RAFT_LOG_INFO:
+		/*
+		 * Demote to D_DEBUG, because we don't have a mechanism yet to
+		 * eventually stop replicas that have been excluded from the
+		 * pool. Every 1--2 election timeouts, these replicas will log a
+		 * few election messages, which might attract complaints if done
+		 * with D_INFO.
+		 */
+		D_DEBUG(DB_MD, DF_DB": %s: rank=%u\n", DP_DB(db), buf, rank);
+		break;
+	default:
+		D_DEBUG(DB_TRACE, DF_DB": %s: rank=%u\n", DP_DB(db), buf, rank);
 	}
 }
 
@@ -3258,4 +3276,15 @@ rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc)
 	default:
 		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
 	}
+}
+
+void
+rdb_raft_module_init(void)
+{
+	raft_set_log_level(RAFT_LOG_DEBUG);
+}
+
+void
+rdb_raft_module_fini(void)
+{
 }
