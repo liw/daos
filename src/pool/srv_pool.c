@@ -823,7 +823,7 @@ select_svc_ranks(int svc_rf, const d_rank_list_t *target_addrs, int ndomains,
 
 	/* TODO: Choose ranks according to failure domains. */
 	j = 0;
-	for (i = 0; i < rnd_tgts->rl_nr; i++) {
+	for (i = rnd_tgts->rl_nr - 1; i >= 0; i--) {
 		if (j == ranks->rl_nr)
 			break;
 		D_DEBUG(DB_MD, "ranks[%d]: %u\n", j, rnd_tgts->rl_ranks[i]);
@@ -831,6 +831,8 @@ select_svc_ranks(int svc_rf, const d_rank_list_t *target_addrs, int ndomains,
 		j++;
 	}
 	D_ASSERTF(j == ranks->rl_nr, "%d == %u\n", j, ranks->rl_nr);
+
+	d_rank_list_sort(ranks);
 
 	*ranksp = ranks;
 	rc = 0;
@@ -5857,9 +5859,6 @@ pool_svc_reconf_ult(void *varg)
 	}
 
 	if (rdb_get_ranks(svc->ps_rsvc.s_db, &new) == 0) {
-		d_rank_list_sort(current);
-		d_rank_list_sort(new);
-
 		if (svc->ps_force_notify || !d_rank_list_identical(new, current)) {
 			int rc_tmp;
 
