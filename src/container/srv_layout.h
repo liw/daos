@@ -21,6 +21,7 @@
  *         Snapshot KVS (INTEGER)
  *         User attribute KVS (GENERIC)
  *         Handle index KVS (GENERIC)
+ *         Snapshot OIT oids KVS
  *       ... (more container property KVSs)
  *     Container handle KVS (GENERIC)
  *     Service ops KVS (GENERIC) - NB used by both pool and container modules
