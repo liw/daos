@@ -959,15 +959,15 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		print_message("Already kill %d targets with %d replica,"
 			      " (max_kill %d) can not kill anymore\n",
 			      arg->srv_disabled_ntgts, svc->rl_nr, max_failure);
-		return;
+		fail();
 	}
 
 	if ((int)rank == -1)
 		rank = arg->srv_nnodes - disable_nodes - 1;
 
 	arg->srv_disabled_ntgts += tgts_per_node;
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr--;
+	rc = d_rank_list_del(svc, rank);
+	assert_rc_equal(rc, 0);
 	print_message("\tKilling rank %d (total of %d with %d already "
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
