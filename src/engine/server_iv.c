@@ -180,10 +180,14 @@ ds_iv_ns_put(struct ds_iv_ns *ns)
 	ns->iv_refcount--;
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
-	if (ns->iv_refcount == 1)
-		ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
-	else if (ns->iv_refcount == 0)
+	if (ns->iv_refcount == 1) {
+		int rc;
+
+		rc = ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
+		D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_set: %d\n", rc);
+	} else if (ns->iv_refcount == 0) {
 		ds_iv_ns_destroy(ns);
+	}
 }
 
 static int
