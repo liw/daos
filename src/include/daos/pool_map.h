@@ -62,7 +62,11 @@ enum pool_component_flags {
 	 * indicate when in status PO_COMP_ST_DOWNOUT, it is changed from
 	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
 	 */
-	PO_COMPF_DOWN2OUT	= 1,
+	PO_COMPF_DOWN2OUT	= (1 << 0),
+	/**
+	 * The component has been processed by DAOS check, only in DRAM.
+	 */
+	PO_COMPF_CHK_DONE	= (1 << 1),
 };
 
 #define co_in_ver	co_out_ver
@@ -217,6 +221,27 @@ static inline unsigned int pool_buf_nr(size_t size)
 		sizeof(struct pool_component);
 }
 
+static inline const char *
+pool_map_status2name(uint32_t status)
+{
+	switch (status) {
+	case PO_COMP_ST_UNKNOWN:
+		return "unknown";
+	case PO_COMP_ST_NEW:
+		return "new";
+	case PO_COMP_ST_UP:
+		return "up";
+	case PO_COMP_ST_DOWN:
+		return "down";
+	case PO_COMP_ST_DOWNOUT:
+		return "downout";
+	case PO_COMP_ST_DRAIN:
+		return "drain";
+	default:
+		D_ASSERTF(0, "Invalid status %u\n", status);
+	}
+}
+
 struct pool_map;
 
 struct pool_buf *pool_buf_alloc(unsigned int nr);
@@ -240,6 +265,7 @@ void pool_map_print(struct pool_map *map);
 
 int  pool_map_set_version(struct pool_map *map, uint32_t version);
 uint32_t pool_map_get_version(struct pool_map *map);
+uint32_t pool_map_bump_version(struct pool_map *map);
 
 int pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain);
 

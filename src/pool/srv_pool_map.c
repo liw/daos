@@ -318,7 +318,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 					target->ta_comp.co_fseq;
 			} else if (opc == POOL_EXCLUDE_OUT) {
 				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
-				dom->do_comp.co_flags = PO_COMPF_DOWN2OUT;
+				dom->do_comp.co_flags |= PO_COMPF_DOWN2OUT;
 				dom->do_comp.co_out_ver =
 					target->ta_comp.co_out_ver;
 			} else

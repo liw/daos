@@ -113,6 +113,7 @@ def scons():
 
     # Build each DAOS component
     SConscript('rsvc/SConscript')
+    SConscript('chk/SConscript')
     SConscript('mgmt/SConscript')
     SConscript('pool/SConscript')
     SConscript('container/SConscript')
@@ -134,6 +135,9 @@ def scons():
 
     # Build utilities
     SConscript('utils/SConscript')
+
+    # Build ddb
+    SConscript('ddb/SConscript')
 
     # Build the control plane components
     SConscript('control/SConscript')
