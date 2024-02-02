@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/dustin/go-humanize"
@@ -235,6 +236,9 @@ type containerCreateCmd struct {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
+	fmt.Fprintf(os.Stderr, "debug: containerCreateCmd: begin: %s\n", time.Now().Local())
+	defer func() { fmt.Fprintf(os.Stderr, "debug: containerCreateCmd: end: %s\n", time.Now().Local()) }()
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
