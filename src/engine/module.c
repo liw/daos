@@ -297,6 +297,8 @@ dss_module_setup_all(void)
 	struct loaded_mod      *mod;
 	int			rc = 0;
 
+	srand(dss_self_rank());
+
 	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
 		struct dss_module *m = mod->lm_dss_mod;
