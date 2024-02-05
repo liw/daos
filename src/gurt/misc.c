@@ -57,6 +57,16 @@ d_rand()
 	return result;
 }
 
+/* Return a random double in [0, 1). */
+double
+d_randd(void)
+{
+	double result;
+
+	drand48_r(&randBuffer, &result);
+	return result;
+}
+
 /* Return a random integer in [0, n), where n must be positive. */
 long int
 d_randn(long int n)

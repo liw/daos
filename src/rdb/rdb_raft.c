@@ -1406,6 +1406,12 @@ rdb_raft_cb_get_time(raft_server_t *raft, void *user_data)
 	return now.tv_sec * 1000 + now.tv_nsec / (1000 * 1000);
 }
 
+static double
+rdb_raft_cb_get_rand(raft_server_t *raft, void *user_data)
+{
+	return d_randd();
+}
+
 /*
  * rdb's raft callback implementations
  *
@@ -1428,7 +1434,8 @@ static raft_cbs_t rdb_raft_cbs = {
 	.log_get_node_id		= rdb_raft_cb_log_get_node_id,
 	.notify_membership_event	= rdb_raft_cb_notify_membership_event,
 	.log				= rdb_raft_cb_debug,
-	.get_time			= rdb_raft_cb_get_time
+	.get_time			= rdb_raft_cb_get_time,
+	.get_rand			= rdb_raft_cb_get_rand
 };
 
 static int
