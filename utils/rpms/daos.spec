@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       14%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -590,6 +590,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Feb 06 2024 Fan Yong <fan.yong@intel.com> 2.5.100-15
+- Catastrophic Recovery
+
 * Tue Jan 09 2024 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-14
 - Move /etc/ld.so.conf.d/daos.conf to daos-server sub-package
 
