@@ -641,7 +641,7 @@ ds_pool_cache_fini(void)
  * set @pool.
  */
 int
-ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
+ds_pool_lookup_f(const uuid_t uuid, struct ds_pool **pool)
 {
 	struct daos_llink	*llink;
 	int			 rc;
@@ -668,7 +668,7 @@ ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
 }
 
 void
-ds_pool_get(struct ds_pool *pool)
+ds_pool_get_f(struct ds_pool *pool)
 {
 	D_ASSERT(pool != NULL);
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
@@ -677,7 +677,7 @@ ds_pool_get(struct ds_pool *pool)
 }
 
 void
-ds_pool_put(struct ds_pool *pool)
+ds_pool_put_f(struct ds_pool *pool)
 {
 	int	rc;
 
