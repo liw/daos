@@ -1118,15 +1118,15 @@ static void pool_tgt_disconnect(struct ds_pool_hdl *hdl);
 static void
 pool_tgt_disconnect_all(struct ds_pool *pool)
 {
-	struct ds_pool_hdl *hdl;
+	while (!d_list_empty(&pool->sp_hdls)) {
+		struct ds_pool_hdl *hdl;
 
-	while ((hdl = d_list_pop_entry(&pool->sp_hdls, struct ds_pool_hdl, sph_pool_entry)) !=
-	       NULL) {
 		/*
 		 * The handle will not be freed before we get our reference,
 		 * because ds_pool_tgt_connect, ds_pool_tgt_disconnect, and us
 		 * all run on the same xstream.
 		 */
+		hdl = d_list_entry(pool->sp_hdls.next, struct ds_pool_hdl, sph_pool_entry);
 		ds_pool_hdl_get(hdl);
 		pool_tgt_disconnect(hdl);
 		ds_pool_hdl_put(hdl);
@@ -1565,9 +1565,9 @@ pool_tgt_disconnect(struct ds_pool_hdl *hdl)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	D_DEBUG(DB_MD, DF_UUID ": hdl=" DF_UUID "\n", DP_UUID(hdl->sph_pool->sp_uuid),
 		DP_UUID(hdl->sph_uuid));
-	ds_pool_iv_conn_hdl_invalidate(hdl->sph_pool, hdl->sph_uuid);
 	pool_hdl_delete(hdl);
 	d_list_del_init(&hdl->sph_pool_entry);
+	ds_pool_iv_conn_hdl_invalidate(hdl->sph_pool, hdl->sph_uuid);
 }
 
 void
