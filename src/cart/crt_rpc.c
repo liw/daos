@@ -1777,10 +1777,10 @@ crt_handle_rpc(void *arg)
 int
 crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_context	*crt_ctx;
-	int			 rc = 0;
-	bool			skip_check = false;
-	d_rank_t		self_rank;
+	struct crt_context *crt_ctx;
+	int                 rc = 0;
+	d_rank_t            self_rank;
+	bool                skip_rank_check = false;
 
 	D_ASSERT(rpc_priv != NULL);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
@@ -1792,7 +1792,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc = -DER_HLC_SYNC);
 
 	if (self_rank == CRT_NO_RANK)
-		skip_check = true;
+		skip_rank_check = true;
 
 	/* Skip check when CORPC is sent to self */
 	if (rpc_priv->crp_coll) {
@@ -1803,25 +1803,18 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 				rpc_priv->crp_corpc_info->co_root);
 
 		if (pri_root == self_rank)
-			skip_check = true;
+			skip_rank_check = true;
 	}
 
-	if ((self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
+	if ((!skip_rank_check && (self_rank != rpc_priv->crp_req_hdr.cch_dst_rank)) ||
 	    (crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag)) {
-		if (!skip_check) {
-			D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
-				"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
-				rpc_priv,
-				rpc_priv->crp_pub.cr_opc,
-				rpc_priv->crp_req_hdr.cch_dst_rank,
-				rpc_priv->crp_req_hdr.cch_dst_tag,
-				self_rank,
-				crt_ctx->cc_idx,
-				rpc_priv->crp_pub.cr_ep.ep_rank,
-				rpc_priv->crp_pub.cr_ep.ep_tag);
+		D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
+			"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
+			rpc_priv, rpc_priv->crp_pub.cr_opc, rpc_priv->crp_req_hdr.cch_dst_rank,
+			rpc_priv->crp_req_hdr.cch_dst_tag, self_rank, crt_ctx->cc_idx,
+			rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
 
-			D_GOTO(out, rc = -DER_BAD_TARGET);
-		}
+		D_GOTO(out, rc = -DER_BAD_TARGET);
 	}
 
 	/* Set the reply pending bit unless this is a one-way OPCODE */
