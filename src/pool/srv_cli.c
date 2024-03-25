@@ -849,3 +849,108 @@ dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_
 
 	return dsc_pool_svc_call(pool_uuid, ranks, cbs, &arg, deadline);
 }
+
+struct pool_set_prop_arg {
+	daos_prop_t *pspa_prop;
+};
+
+static int
+pool_set_prop_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_set_prop_arg *arg = varg;
+
+	pool_prop_set_in_set_data(rpc, arg->pspa_prop);
+	return 0;
+}
+
+static int
+pool_set_prop_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_prop_set_out *out = crt_reply_get(rpc);
+	int                       rc  = out->pso_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": failed to set prop for pool", DP_UUID(pool_uuid));
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_set_prop_cbs = {
+	.pscc_op	= POOL_PROP_GET,
+	.pscc_init	= pool_set_prop_init,
+	.pscc_consume	= pool_set_prop_consume,
+	.pscc_fini	= NULL
+};
+
+/**
+ * Set the requested pool properties.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	deadline	Unix time deadline in milliseconds
+ * \param[in]	prop		Pool prop
+ *
+ * \return	0		Success
+ */
+int
+dsc_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline, daos_prop_t *prop)
+{
+	struct pool_set_prop_arg arg ={
+		.pspa_prop	= prop
+	};
+
+	D_DEBUG(DB_MGMT, DF_UUID ": Setting pool prop\n", DP_UUID(pool_uuid));
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_PERF_DOMAIN)) {
+		D_ERROR("Can't set perf_domain on existing pool.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC)) {
+		D_ERROR("Can't set set redundancy factor on existing pool.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_EC_PDA)) {
+		D_ERROR("Can't set EC performance domain affinity on existing pool\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_RP_PDA)) {
+		D_ERROR("Can't set RP performance domain affinity on existing pool\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION)) {
+		D_ERROR("Can't set pool global version if pool is created.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_UPGRADE_STATUS)) {
+		D_ERROR("Can't set pool upgrade status if pool is created.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENABLED)) {
+		D_ERROR("Can't set pool svc_ops_enabled on existing pool.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENTRY_AGE)) {
+		D_ERROR("Can't set pool svc_ops_entry_age on existing pool.\n");
+		return -DER_NO_PERM;
+	}
+
+	/* Disallow to begin with; will support in the future. */
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_REDUN_FAC)) {
+		D_ERROR(DF_UUID ": cannot set pool service redundancy factor on existing pool\n",
+			DP_UUID(pool_uuid));
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION)) {
+		D_ERROR("Can't set pool obj version if pool is created.\n");
+		return -DER_NO_PERM;
+	}
+
+	return dsc_pool_svc_call(pool_uuid, ranks, &pool_set_prop_cbs, &arg, deadline);
+}

@@ -283,8 +283,8 @@ int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 
 int dsc_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 			  daos_prop_t *prop);
-int ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
-			 daos_prop_t *prop);
+int dsc_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+			  daos_prop_t *prop);
 int ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   struct daos_acl *acl);
 int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,

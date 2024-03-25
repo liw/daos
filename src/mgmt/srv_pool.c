@@ -528,7 +528,7 @@ ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_ACL;
 	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
 
-	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_set_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 	if (rc != 0)
 		goto out_prop;
 
@@ -607,7 +607,7 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	D_DEBUG(DB_MGMT, "Setting properties for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_set_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 
 out:
 	return rc;
