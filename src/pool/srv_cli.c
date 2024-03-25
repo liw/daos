@@ -716,3 +716,57 @@ dsc_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 	D_DEBUG(DB_MGMT, DF_UUID ": Getting prop\n", DP_UUID(pool_uuid));
 	return dsc_pool_svc_call(pool_uuid, ranks, &pool_get_prop_cbs, &arg, deadline);
 }
+
+struct pool_extend_arg {
+	int                  pea_ntargets;
+	const d_rank_list_t *pea_rank_list;
+	int                  pea_ndomains;
+	const uint32_t      *pea_domains;
+};
+
+static int
+pool_extend_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_extend_arg *arg = varg;
+	struct pool_extend_in  *in  = crt_req_get(rpc);
+
+	in->pei_ntgts             = arg->pea_ntargets;
+	in->pei_ndomains          = arg->pea_ndomains;
+	in->pei_tgt_ranks         = (d_rank_list_t *)arg->pea_rank_list;
+	in->pei_domains.ca_count  = arg->pea_ndomains;
+	in->pei_domains.ca_arrays = (uint32_t *)arg->pea_domains;
+	return 0;
+}
+
+static int
+pool_extend_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_extend_out *out = crt_reply_get(rpc);
+	int                     rc  = out->peo_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": Failed to set targets to UP state for reintegration\n",
+			 DP_UUID(pool_uuid));
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_extend_cbs = {
+	.pscc_op	= POOL_EXTEND,
+	.pscc_init	= pool_extend_init,
+	.pscc_consume	= pool_extend_consume,
+	.pscc_fini	= NULL
+};
+
+int
+dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline, int ntargets,
+		    const d_rank_list_t *rank_list, int ndomains, const uint32_t *domains)
+{
+	struct pool_extend_arg arg = {
+		.pea_ntargets	= ntargets,
+		.pea_rank_list	= rank_list,
+		.pea_ndomains	= ndomains,
+		.pea_domains	= domains
+	};
+
+	return dsc_pool_svc_call(pool_uuid, svc_ranks, &pool_extend_cbs, &arg, deadline);
+}

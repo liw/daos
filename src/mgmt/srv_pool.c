@@ -307,7 +307,8 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *r
 	/* TODO: Need to make pool service aware of new rank UUIDs */
 
 	ntargets = unique_add_ranks->rl_nr;
-	rc = ds_pool_extend(pool_uuid, ntargets, unique_add_ranks, domains_nr, domains, svc_ranks);
+	rc = dsc_pool_svc_extend(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), ntargets,
+				 unique_add_ranks, domains_nr, domains);
 out:
 	d_rank_list_free(unique_add_ranks);
 	return rc;
