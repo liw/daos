@@ -365,7 +365,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, target_addrs, state);
+	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
+					      target_addrs, state);
 
 	return rc;
 }
