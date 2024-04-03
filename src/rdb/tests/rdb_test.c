@@ -827,6 +827,11 @@ out:
 
 }
 
+static void
+rdbt_benchmark_handler(crt_rpc_t *rpc)
+{
+}
+
 /* Define for cont_rpcs[] array population below.
  * See RDBT_PROTO_*_RPC_LIST macro definition
  */

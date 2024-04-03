@@ -46,7 +46,10 @@
 		rdbt_replicas_remove_handler, NULL),			\
 	X(RDBT_START_ELECTION,						\
 		0, &CQF_rdbt_start_election,				\
-		rdbt_start_election_handler, NULL)
+		rdbt_start_election_handler, NULL)			\
+	X(RDBT_BENCHMARK,						\
+		0, &CQF_rdbt_benchmark,					\
+		rdbt_benchmark_handler, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -166,5 +169,13 @@ CRT_RPC_DECLARE(rdbt_replicas_stop, DAOS_ISEQ_RDBT_STARTSTOP,
 
 CRT_RPC_DECLARE(rdbt_start_election, DAOS_ISEQ_RDBT_START_ELECTION,
 		DAOS_OSEQ_RDBT_START_ELECTION)
+
+#define DAOS_ISEQ_RDBT_BENCHMARK_OP	/* input fields */					\
+	((uint32_t)	(tbi_metadata)	CRT_VAR)
+
+#define DAOS_OSEQ_RDBT_BENCHMARK_OP	/* output fields */					\
+	((int32_t)	(tbo_rc)	CRT_VAR)
+
+CRT_RPC_DECLARE(rdbt_benchmark, DAOS_ISEQ_RDBT_BENCHMARK_OP, DAOS_OSEQ_RDBT_BENCHMARK_OP)
 
 #endif /* RDB_TESTS_RPC_H */
