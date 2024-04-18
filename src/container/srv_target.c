@@ -1823,8 +1823,7 @@ ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid)
 
 	uuid_copy(arg.uuid, hdl_uuid);
 
-	return ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-					 PO_COMP_ST_DOWNOUT, cont_close_one_hdl, &arg, 0);
+	return ds_pool_thread_collective(pool_uuid, 0, cont_close_one_hdl, &arg, 0);
 }
 
 struct xstream_cont_query {
