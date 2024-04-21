@@ -2849,6 +2849,14 @@ rdb_raft_load(struct rdb *db)
 	if (rc != 0)
 		goto out;
 
+	D_DEBUG(DB_MD,
+		DF_DB ": term=" DF_U64 " vote=%d lc.uuid=" DF_UUID " lc.base_term=" DF_U64
+		      " lc.base=" DF_U64 " lc.tail=" DF_U64 " lc.aggregated=" DF_U64
+		      " lc.term=" DF_U64 " lc.seq=" DF_U64 "\n",
+		DP_DB(db), term, vote, DP_UUID(db->d_lc_record.dlr_uuid),
+		db->d_lc_record.dlr_base_term, db->d_lc_record.dlr_base, db->d_lc_record.dlr_tail,
+		db->d_lc_record.dlr_aggregated, db->d_lc_record.dlr_term, db->d_lc_record.dlr_seq);
+
 	db->d_raft_loaded = true;
 out:
 	D_DEBUG(DB_MD, DF_DB": load persistent state: end: "DF_RC"\n", DP_DB(db), DP_RC(rc));
