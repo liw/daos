@@ -1125,7 +1125,8 @@ out:
  * rdb_raft_update_node).
  */
 static int
-rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, rdb_vos_tx_t vtx)
+rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, bool skip_apply,
+			  rdb_vos_tx_t vtx)
 {
 	d_iov_t			keys[2];
 	d_iov_t			values[2];
@@ -1158,11 +1159,13 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 	 * until the TX releases the locks for the updates after the
 	 * rdb_tx_commit() call returns.)
 	 */
-	if (entry->type == RAFT_LOGTYPE_NORMAL) {
+	if (entry->type == RAFT_LOGTYPE_NORMAL && !skip_apply) {
 		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
 				  rdb_raft_lookup_result(db, index), &crit, vtx);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to apply entry " DF_U64, DP_DB(db), index);
+			if (rc != RDB_TX_APPLY_ERR_DETERMINISTIC)
+				DL_ERROR(rc, DF_DB ": failed to apply entry " DF_U64, DP_DB(db),
+					 index);
 			goto err;
 		}
 		dirtied_kvss = true;
@@ -1214,9 +1217,6 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 		entry->data.buf = NULL;
 	}
 
-	D_DEBUG(DB_TRACE, DF_DB": appended entry "DF_U64": term=%ld type=%s buf=%p len=%u\n",
-		DP_DB(db), index, entry->term, rdb_raft_entry_type_str(entry->type),
-		entry->data.buf, entry->data.len);
 	return 0;
 
 err:
@@ -1226,24 +1226,27 @@ err:
 	return rc;
 }
 
+/* If entry == NULL, the caller doesn't want to apply the entry. */
 static int
 rdb_raft_entry_count_vops(struct rdb *db, raft_entry_t *entry)
 {
 	int count = 0;
 
-	/* Count those that will be invoked when applying the entry. */
-	if (entry->type == RAFT_LOGTYPE_NORMAL) {
-		int rc;
+	if (entry != NULL) {
+		/* Count those that will be invoked when applying the entry. */
+		if (entry->type == RAFT_LOGTYPE_NORMAL) {
+			int rc;
 
-		rc = rdb_tx_count_vops(db, entry->data.buf, entry->data.len);
-		if (rc < 0)
-			return rc;
-		count += rc;
-	} else if (raft_entry_is_cfg_change(entry)) {
-		count += RDB_RAFT_UPDATE_NODE_NVOPS;
-	} else {
-		D_ERROR(DF_DB ": unknown entry type %d\n", DP_DB(db), entry->type);
-		return -DER_IO;
+			rc = rdb_tx_count_vops(db, entry->data.buf, entry->data.len);
+			if (rc < 0)
+				return rc;
+			count += rc;
+		} else if (raft_entry_is_cfg_change(entry)) {
+			count += RDB_RAFT_UPDATE_NODE_NVOPS;
+		} else {
+			D_ERROR(DF_DB ": unknown entry type %d\n", DP_DB(db), entry->type);
+			return -DER_IO;
+		}
 	}
 
 	/* Count those that will be invoked when storing the entry. */
@@ -1253,12 +1256,12 @@ rdb_raft_entry_count_vops(struct rdb *db, raft_entry_t *entry)
 }
 
 static int
-rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries,
-		      raft_index_t index, int *n_entries)
+rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries, raft_index_t index,
+		      int *n_entries)
 {
-	struct rdb     *db = arg;
-	int		i;
-	int		rc = 0;
+	struct rdb *db = arg;
+	int         i;
+	int         rc = 0;
 
 	if (!db->d_raft_loaded)
 		return 0;
@@ -1271,8 +1274,10 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries,
 	 */
 	for (i = 0; i < *n_entries; i++) {
 		rdb_vos_tx_t vtx;
+		bool         skip_apply = false;
 
-		rc = rdb_raft_entry_count_vops(db, &entries[i]);
+retry:
+		rc = rdb_raft_entry_count_vops(db, skip_apply ? NULL : &entries[i]);
 		if (rc < 0) {
 			DL_ERROR(rc, DF_DB ": failed to count VOS operations", DP_DB(db));
 			break;
@@ -1281,18 +1286,41 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries,
 		rc = rdb_vos_tx_begin(db, rc, &vtx);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_DB ": failed to begin VOS TX for entry %ld", DP_DB(db),
-				 index);
+				 index + i);
 			break;
 		}
 
-		rc = rdb_raft_log_offer_single(db, &entries[i], index + i, vtx);
+		rc = rdb_raft_log_offer_single(db, &entries[i], index + i, skip_apply, vtx);
+		if (rc == RDB_TX_APPLY_ERR_DETERMINISTIC) {
+			/*
+			 * We must abort vtx to discard any partial application
+			 * of the entry, and begin a new vtx to store the entry
+			 * without applying it.
+			 *
+			 * Since only the process of applying an entry may
+			 * generate RDB_TX_APPLY_ERR_DETERMINISTIC, skip_apply
+			 * must be false here.
+			 */
+			D_DEBUG(DB_TRACE, DF_DB ": handling determinstic error\n", DP_DB(db));
+			rc = -DER_AGAIN;
+			D_ASSERT(!skip_apply);
+			skip_apply = true;
+		}
 
 		rc = rdb_vos_tx_end(db, vtx, rc);
-		if (rc != 0) {
+		if (rc == -DER_AGAIN && skip_apply) {
+			D_DEBUG(DB_TRACE, DF_DB ": aborted before retrying\n", DP_DB(db));
+			goto retry;
+		} else if (rc != 0) {
 			DL_ERROR(rc, DF_DB ": failed to end VOS TX for entry %ld", DP_DB(db),
-				 index);
+				 index + i);
 			break;
 		}
+
+		D_DEBUG(DB_TRACE, DF_DB ": appended entry %ld: term=%ld type=%s buf=%p len=%u\n",
+			DP_DB(db), index + i, entries[i].term,
+			rdb_raft_entry_type_str(entries[i].type), entries[i].data.buf,
+			entries[i].data.len);
 	}
 	*n_entries = i;
 
