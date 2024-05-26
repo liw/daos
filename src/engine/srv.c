@@ -279,6 +279,9 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	struct sched_req_attr	 attr = { 0 };
 	int			 rc;
 
+	if (dss_srv_shutting_down())
+		return -DER_CANCELED;
+
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
 		return 0;
 
@@ -1503,7 +1506,7 @@ dss_srv_shutting_down(void)
 }
 
 static void
-set_draining(void *arg)
+set_shutting_down(void *arg)
 {
 	dss_get_module_info()->dmi_srv_shutting_down = true;
 }
@@ -1525,7 +1528,7 @@ dss_srv_set_shutting_down(void)
 		struct dss_xstream     *dx = dss_get_xstream(i);
 		ABT_task		task;
 
-		rc = ABT_task_create(dx->dx_pools[DSS_POOL_GENERIC], set_draining, NULL /* arg */,
+		rc = ABT_task_create(dx->dx_pools[DSS_POOL_GENERIC], set_shutting_down, NULL /* arg */,
 				     &task);
 		D_ASSERTF(rc == ABT_SUCCESS, "create task: %d\n", rc);
 		rc = ABT_task_free(&task);
