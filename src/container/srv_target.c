@@ -636,11 +636,9 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		goto out_scrub_cond;
 	}
 
-	cont->sc_pool = ds_pool_child_lookup(po_uuid);
-	if (cont->sc_pool == NULL) {
-		rc = -DER_NO_HDL;
+	rc = ds_pool_child_lookup(po_uuid, &cont->sc_pool);
+	if (rc != 0)
 		goto out_rebuild_cond;
-	}
 
 	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
 	if (rc != 0)

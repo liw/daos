@@ -87,25 +87,26 @@ pool_child_lookup_noref(const uuid_t uuid)
 	return NULL;
 }
 
-struct ds_pool_child *
-ds_pool_child_lookup(const uuid_t uuid)
+int
+ds_pool_child_lookup(const uuid_t uuid, struct ds_pool_child **child)
 {
-	struct ds_pool_child	*child;
+	uint32_t state;
 
-	child = pool_child_lookup_noref(uuid);
-	if (child == NULL) {
+	*child = pool_child_lookup_noref(uuid);
+	if (*child == NULL) {
 		D_ERROR(DF_UUID": Pool child isn't found.\n", DP_UUID(uuid));
-		return child;
+		return -DER_CANCELED;
 	}
 
-	if (*child->spc_state == POOL_CHILD_NEW || *child->spc_state == POOL_CHILD_STOPPING) {
-		D_ERROR(DF_UUID": Pool child isn't ready. (%u)\n",
-			DP_UUID(uuid), *child->spc_state);
-		return NULL;
+	state = *(*child)->spc_state;
+	if (state == POOL_CHILD_NEW || state == POOL_CHILD_STOPPING) {
+		D_ERROR(DF_UUID": Pool child isn't ready. (%u)\n", DP_UUID(uuid), state);
+		*child = NULL;
+		return -DER_CANCELED;
 	}
 
-	child->spc_ref++;
-	return child;
+	(*child)->spc_ref++;
+	return 0;
 }
 
 void

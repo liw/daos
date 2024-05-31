@@ -249,7 +249,7 @@ ds_pool_svc_ops_save(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t
 		     uint64_t cli_time, bool dup_op, int rc_in, struct ds_pool_svc_op_val *op_valp);
 
 /* Find ds_pool_child in cache, hold one reference */
-struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
+int ds_pool_child_lookup(const uuid_t uuid, struct ds_pool_child **child);
 /* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
 /* Start ds_pool child */
