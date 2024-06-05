@@ -511,8 +511,15 @@ again:
 					}
 					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 					D_ASSERT(prop_entry != NULL);
-
 					daos_prop_val_2_co_status(prop_entry->dpe_val, &stat);
+
+					rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
+							      civ_key->cont_uuid, chdl.ch_cont,
+							      chdl.ch_flags, chdl.ch_sec_capas,
+							      stat.dcs_pm_ver);
+					if (rc != 0)
+						D_GOTO(out, rc);
+
 					iv_entry.iv_capa.status_pm_ver = stat.dcs_pm_ver;
 					daos_prop_free(prop);
 					/* Only happens on xstream 0 */
