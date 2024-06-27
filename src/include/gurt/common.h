@@ -1241,15 +1241,11 @@ D_VEC_DECLARE(pointers, void *, elem)
 
 struct d_ref_tracker_rec;
 
-#ifdef DAOS_WITH_REF_TRACKER
 D_VEC_DECLARE(ref_tracker_rec, struct d_ref_tracker_rec, *elem);
-#endif
 
 /** Reference tracker */
 struct d_ref_tracker {
-#ifdef DAOS_WITH_REF_TRACKER
 	struct d_vec_ref_tracker_rec rft_vec;
-#endif
 };
 
 #ifdef DAOS_WITH_REF_TRACKER

@@ -179,7 +179,9 @@ struct ds_pool_child {
 	uint64_t		spc_rebuild_end_hlc;
 	uint32_t		spc_map_version;
 	int			spc_ref;
+#ifdef DAOS_WITH_REF_TRACKER
 	struct d_ref_tracker	spc_ref_tracker;
+#endif
 	ABT_eventual		spc_ref_eventual;
 
 	uint64_t	spc_discard_done:1,
