@@ -1196,7 +1196,12 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 
 	ds_iv_ns_start(pool->sp_iv_ns);
 
-	return rc;
+	/* Ignore errors, for other PS replicas may work. */
+	rc = ds_pool_svc_start(uuid);
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID": failed to start pool service", DP_UUID(uuid));
+
+	return 0;
 
 failure_ult:
 	pool_fetch_hdls_ult_abort(pool);
@@ -1253,6 +1258,8 @@ ds_pool_stop(uuid_t uuid)
 	}
 	pool->sp_stopping = 1;
 	D_INFO(DF_UUID ": stopping\n", DP_UUID(uuid));
+
+	ds_pool_svc_stop(uuid);
 
 	pool_tgt_disconnect_all(pool);
 

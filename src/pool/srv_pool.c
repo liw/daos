@@ -170,13 +170,13 @@ sched_cancel_and_wait(struct pool_svc_sched *sched)
 struct pool_svc {
 	struct ds_rsvc		ps_rsvc;
 	uuid_t                  ps_uuid;     /* pool UUID */
+	struct ds_pool	       *ps_pool;
 	struct cont_svc        *ps_cont_svc; /* one combined svc for now */
 	ABT_rwlock              ps_lock;     /* for DB data */
 	rdb_path_t              ps_root;     /* root KVS */
 	rdb_path_t              ps_handles;  /* pool handle KVS */
 	rdb_path_t              ps_user;     /* pool user attributes KVS */
 	rdb_path_t              ps_ops;      /* metadata ops KVS */
-	struct ds_pool	       *ps_pool;
 	struct pool_svc_events	ps_events;
 	uint32_t		ps_global_version;
 	int			ps_svc_rf;
@@ -1078,6 +1078,50 @@ out:
 	return rc;
 }
 
+/** Start any local PS replica for \a uuid. */
+int
+ds_pool_svc_start(uuid_t uuid)
+{
+	char       *path;
+	struct stat st;
+	d_iov_t     id;
+	int         rc;
+
+	/*
+	 * Check if an RDB file exists, to avoid unnecessary error messages
+	 * from the ds_rsvc_start() call.
+	 */
+	path = ds_pool_svc_rdb_path(uuid);
+	if (path == NULL) {
+		D_ERROR(DF_UUID ": failed to allocate pool service path\n", DP_UUID(uuid));
+		return -DER_NOMEM;
+	}
+	rc = stat(path, &st);
+	D_FREE(path);
+	if (rc != 0) {
+		rc = errno;
+		if (rc == ENOENT) {
+			D_DEBUG(DB_MD, DF_UUID ": no pool service file\n", DP_UUID(uuid));
+			return 0;
+		}
+		D_ERROR(DF_UUID ": failed to stat pool service file: %d\n", DP_UUID(uuid), rc);
+		return daos_errno2der(rc);
+	}
+
+	d_iov_set(&id, uuid, sizeof(uuid_t));
+	rc = ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, RDB_NIL_TERM, DS_RSVC_START, 0 /* size */,
+			   0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */);
+	if (rc == -DER_ALREADY) {
+		D_DEBUG(DB_MD, DF_UUID": pool service already started\n", DP_UUID(uuid));
+		return 0;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to start pool service", DP_UUID(uuid));
+		return rc;
+	}
+
+	return 0;
+}
+
 /** Stop any local PS replica for \a pool_uuid. */
 int
 ds_pool_svc_stop(uuid_t pool_uuid)
@@ -1091,6 +1135,9 @@ ds_pool_svc_stop(uuid_t pool_uuid)
 	if (rc == -DER_ALREADY) {
 		D_DEBUG(DB_MD, DF_UUID": ds_rsvc_stop: "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 		rc = 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to stop pool service (if any): " DF_RC "\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 	}
 
 	return rc;
@@ -1151,11 +1198,17 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 	svc->ps_svc_rf = -1;
 	svc->ps_force_notify = false;
 
+	rc = ds_pool_lookup(svc->ps_uuid, &svc->ps_pool);
+	if (rc != 0) {
+		D_INFO(DF_UUID ": look up pool: " DF_RC "\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto err_svc;
+	}
+
 	rc = ABT_rwlock_create(&svc->ps_lock);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("failed to create ps_lock: %d\n", rc);
 		rc = dss_abterr2der(rc);
-		goto err_svc;
+		goto err_pool;
 	}
 
 	rc = rdb_path_init(&svc->ps_root);
@@ -1212,6 +1265,7 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 
 	*rsvc = &svc->ps_rsvc;
 	return 0;
+
 err_cont_rf_sched:
 	sched_fini(&svc->ps_rfcheck_sched);
 err_sched:
@@ -1230,6 +1284,8 @@ err_root:
 	rdb_path_fini(&svc->ps_root);
 err_lock:
 	ABT_rwlock_free(&svc->ps_lock);
+err_pool:
+	ds_pool_put(svc->ps_pool);
 err_svc:
 	D_FREE(svc);
 err:
@@ -1496,45 +1552,24 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 	rdb_path_fini(&svc->ps_handles);
 	rdb_path_fini(&svc->ps_root);
 	ABT_rwlock_free(&svc->ps_lock);
+	ds_pool_put(svc->ps_pool);
 	D_FREE(svc);
 }
 
 /*
- * Initialize and update svc->ps_pool with map_buf and map_version. This
- * ensures that svc->ps_pool matches the latest pool map.
+ * Update svc->ps_pool with map_buf and map_version. This ensures that
+ * svc->ps_pool matches the latest pool map.
  */
 static int
-init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
-	      uint32_t map_version, uint64_t term)
+update_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf, uint32_t map_version, uint64_t term)
 {
-	struct ds_pool *pool;
-	int		rc;
+	int rc;
 
-	rc = ds_pool_lookup(svc->ps_uuid, &pool);
-	if (rc) {
-		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, map_version);
+	if (rc != 0)
 		return rc;
-	}
-	rc = ds_pool_tgt_map_update(pool, map_buf, map_version);
-	if (rc != 0) {
-		ds_pool_put(pool);
-		return rc;
-	}
-	ds_pool_iv_ns_update(pool, dss_self_rank(), term);
-
-	D_ASSERT(svc->ps_pool == NULL);
-	svc->ps_pool = pool;
+	ds_pool_iv_ns_update(svc->ps_pool, dss_self_rank(), term);
 	return 0;
-}
-
-/* Finalize svc->ps_pool. */
-static void
-fini_svc_pool(struct pool_svc *svc)
-{
-	D_ASSERT(svc->ps_pool != NULL);
-	ds_pool_put(svc->ps_pool);
-	svc->ps_pool = NULL;
 }
 
 /* Is the primary group initialized (i.e., version > 0)? */
@@ -1994,7 +2029,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = init_svc_pool(svc, map_buf, map_version, svc->ps_rsvc.s_term);
+	rc = update_svc_pool(svc, map_buf, map_version, svc->ps_rsvc.s_term);
 	if (rc != 0)
 		goto out;
 
@@ -2093,8 +2128,6 @@ out:
 		sched_cancel_and_wait(&svc->ps_reconf_sched);
 		if (cont_svc_up)
 			ds_cont_svc_step_down(svc->ps_cont_svc);
-		if (svc->ps_pool != NULL)
-			fini_svc_pool(svc);
 	}
 	if (map_buf != NULL)
 		D_FREE(map_buf);
@@ -2118,7 +2151,6 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	sched_cancel_and_wait(&svc->ps_reconf_sched);
 	sched_cancel_and_wait(&svc->ps_rfcheck_sched);
 	ds_cont_svc_step_down(svc->ps_cont_svc);
-	fini_svc_pool(svc);
 
 	DS_POOL_NOTE_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
 			   DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
@@ -2337,49 +2369,22 @@ int ds_pool_failed_lookup(uuid_t uuid)
 }
 
 /*
- * Try to start the pool. If a pool service RDB exists, start it. Continue the
- * iteration upon errors as other pools may still be able to work.
+ * Try to start the pool. Continue the iteration upon errors as other pools may
+ * still be able to work.
  */
 static int
 start_one(uuid_t uuid, void *varg)
 {
-	char	       *path;
-	d_iov_t		id;
-	struct stat	st;
-	int		rc;
+	int rc;
 
-	D_DEBUG(DB_MD, DF_UUID": starting pool\n", DP_UUID(uuid));
+	D_DEBUG(DB_MD, DF_UUID ": starting pool\n", DP_UUID(uuid));
 
 	rc = ds_pool_start(uuid, varg != NULL ? true : false);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start pool: %d\n", DP_UUID(uuid),
-			rc);
+		DL_ERROR(rc, DF_UUID ": failed to start pool", DP_UUID(uuid));
 		ds_pool_failed_add(uuid, rc);
-		return 0;
 	}
 
-	/*
-	 * Check if an RDB file exists, to avoid unnecessary error messages
-	 * from the ds_rsvc_start() call.
-	 */
-	path = ds_pool_svc_rdb_path(uuid);
-	if (path == NULL) {
-		D_ERROR(DF_UUID": failed to allocate rdb path\n",
-			DP_UUID(uuid));
-		return 0;
-	}
-	rc = stat(path, &st);
-	D_FREE(path);
-	if (rc != 0) {
-		if (errno != ENOENT)
-			D_ERROR(DF_UUID": failed to check rdb existence: %d\n",
-				DP_UUID(uuid), errno);
-		return 0;
-	}
-
-	d_iov_set(&id, uuid, sizeof(uuid_t));
-	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, RDB_NIL_TERM, DS_RSVC_START /* mode */,
-		      0 /* size */, 0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */);
 	return 0;
 }
 
