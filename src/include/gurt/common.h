@@ -1281,13 +1281,14 @@ void d_ref_tracker_retrack(struct d_ref_tracker *tracker, void *new_addr, void *
 #define D_REF_TRACKER_UNTRACK(tracker, addr) d_ref_tracker_untrack(tracker, addr)
 
 /**
- * Move \a src to \a dst and update \a tracker. NULL will be assigned to \a src.
+ * Move *\a from to *\a to and update \a tracker. NULL will be assigned to
+ * *\a from.
  */
-#define D_REF_TRACKER_MOVE(tracker, dst, src)                                                      \
+#define D_REF_TRACKER_MOVE(tracker, to, from)                                                      \
 	do {                                                                                       \
-		d_ref_tracker_retrack(tracker, &dst, &src, __func__, __LINE__);                    \
-		dst = src;                                                                         \
-		src = NULL;                                                                        \
+		d_ref_tracker_retrack(tracker, to, from, __func__, __LINE__);                      \
+		*to   = *from;                                                                     \
+		*from = NULL;                                                                      \
 	} while (0)
 
 /** Print all references currently tracked by \a tracker. */
