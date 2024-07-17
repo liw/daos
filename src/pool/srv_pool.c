@@ -3803,21 +3803,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		}
 	}
 
-	obj_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
-	D_ASSERT(obj_ver_entry != NULL);
-	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, credp,
-				  svc->ps_global_version, obj_ver_entry->dpe_val);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC)) {
-		D_DEBUG(DB_MD, DF_UUID": fault injected: DAOS_POOL_CONNECT_FAIL_CORPC\n",
-			DP_UUID(in->pci_op.pi_uuid));
-		rc = -DER_TIMEDOUT;
-	}
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to connect to targets: "DF_RC"\n",
-			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
-		D_GOTO(out_map_version, rc);
-	}
-
 	/* handle did not exist so create it */
 	/* XXX may be can check pool version to avoid allocating too much ? */
 	D_ALLOC(hdl, sizeof(*hdl) + credp->iov_len);
@@ -3865,10 +3850,25 @@ out_map_version:
 		goto out_lock;
 
 	if (!dup_op) {
-		/** update metric */
 		metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 		d_tm_inc_counter(metrics->connect_total, 1);
 		d_tm_inc_gauge(metrics->open_handles, 1);
+	}
+
+	if (hdl != NULL) {
+		int rc_tmp;
+
+		obj_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
+		D_ASSERT(obj_ver_entry != NULL);
+		rc_tmp = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, credp,
+					      svc->ps_global_version, obj_ver_entry->dpe_val);
+		if (rc_tmp == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC)) {
+			D_DEBUG(DB_MD, DF_UUID ": fault injected: DAOS_POOL_CONNECT_FAIL_CORPC\n",
+				DP_UUID(in->pci_op.pi_uuid));
+			rc_tmp = -DER_TIMEDOUT;
+		}
+		if (rc_tmp != 0)
+			DL_INFO(rc_tmp, DF_UUID ": update IV", DP_UUID(svc->ps_uuid));
 	}
 
 	if (query_bits & DAOS_PO_QUERY_SPACE)
