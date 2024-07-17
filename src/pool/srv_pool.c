@@ -3488,6 +3488,106 @@ out:
 	crt_reply_send(rpc);
 }
 
+/* Currently we only maintain compatibility between 2 metadata layout versions */
+#define NUM_POOL_VERSIONS 2
+
+static int
+pool_connect_check_cli_pool_version(uuid_t pool_uuid, uint32_t global_ver,
+				    uint32_t cli_pool_version)
+{
+	int diff = DAOS_POOL_GLOBAL_VERSION - cli_pool_version;
+	int rc;
+
+	/*
+	 * Reject pool connection if old clients try to connect new format pool.
+	 */
+	if (cli_pool_version <= DAOS_POOL_GLOBAL_VERSION) {
+		if (diff >= NUM_POOL_VERSIONS) {
+			rc = -DER_NOTSUPPORTED;
+			DL_ERROR(rc,
+				 DF_UUID ": cannot connect, client supported pool "
+					 "layout version (%u) is more than %u versions smaller "
+					 "than server supported pool layout version(%u), "
+					 "try to upgrade client firstly",
+				 DP_UUID(pool_uuid), cli_pool_version, NUM_POOL_VERSIONS - 1,
+				 DAOS_POOL_GLOBAL_VERSION);
+			return rc;
+		}
+
+		if (global_ver > cli_pool_version) {
+			rc = -DER_NOTSUPPORTED;
+			DL_ERROR(rc,
+				 DF_UUID ": cannot connect, pool layout version(%u) > "
+					 "max client supported pool layout version(%u), "
+					 "try to upgrade client firstly",
+				 DP_UUID(pool_uuid), global_ver, cli_pool_version);
+			return rc;
+		}
+	} else {
+		diff = -diff;
+		if (diff >= NUM_POOL_VERSIONS) {
+			rc = -DER_NOTSUPPORTED;
+			DL_ERROR(rc,
+				 DF_UUID ": cannot connect, client supported pool "
+					 "layout version (%u) is more than %u versions "
+					 "larger than server supported pool layout version(%u), "
+					 "try to upgrade server firstly",
+				 DP_UUID(pool_uuid), cli_pool_version, NUM_POOL_VERSIONS - 1,
+				 DAOS_POOL_GLOBAL_VERSION);
+			return rc;
+		}
+		/* New clients should be able to access old pools without problem */
+	}
+
+	return 0;
+}
+
+static int
+pool_connect_check_perm(uuid_t pool_uuid, daos_prop_t *prop, d_iov_t *cred, uint64_t flags,
+			uint64_t *capas)
+{
+	struct daos_prop_entry *acl_entry;
+	struct daos_prop_entry *owner_entry;
+	struct daos_prop_entry *owner_grp_entry;
+	struct d_ownership      owner;
+	int                     rc;
+
+	acl_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	D_ASSERT(acl_entry != NULL);
+	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
+
+	owner_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	D_ASSERT(owner_entry != NULL);
+	D_ASSERT(owner_entry->dpe_str != NULL);
+
+	owner_grp_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(owner_grp_entry != NULL);
+	D_ASSERT(owner_grp_entry->dpe_str != NULL);
+
+	owner.user  = owner_entry->dpe_str;
+	owner.group = owner_grp_entry->dpe_str;
+
+	/*
+	 * Security capabilities determine the access control policy on this
+	 * pool handle.
+	 */
+	rc = ds_sec_pool_get_capabilities(flags, cred, &owner, acl_entry->dpe_val_ptr, capas);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": refusing connect attempt for " DF_X64, DP_UUID(pool_uuid),
+			 flags);
+		return rc;
+	}
+
+	if (!ds_sec_pool_can_connect(*capas)) {
+		rc = -DER_NO_PERM;
+		DL_ERROR(rc, DF_UUID ": permission denied for connect attempt for " DF_X64,
+			 DP_UUID(pool_uuid), flags);
+		return rc;
+	}
+
+	return 0;
+}
+
 static int
 pool_connect_iv_dist(struct pool_svc *svc, uuid_t pool_hdl,
 		     uint64_t flags, uint64_t sec_capas, d_iov_t *cred,
@@ -3528,9 +3628,6 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
-/* Currently we only maintain compatibility between 2 metadata layout versions */
-#define NUM_POOL_VERSIONS	2
-
 static void
 ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 {
@@ -3540,21 +3637,14 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	struct pool_buf		       *map_buf = NULL;
 	uint32_t			map_version;
 	uint32_t			connectable;
-	uint32_t			global_ver;
-	uint32_t			obj_layout_ver;
 	struct rdb_tx			tx;
 	d_iov_t				key;
 	d_iov_t				value;
 	struct pool_hdl		       *hdl = NULL;
 	uint32_t			nhandles;
-	int				skip_update = 0;
-	int				rc;
+	bool                            skip_update = false;
+	int                             rc;
 	daos_prop_t		       *prop = NULL;
-	uint64_t			prop_bits;
-	struct daos_prop_entry	       *acl_entry;
-	struct d_ownership		owner;
-	struct daos_prop_entry	       *owner_entry, *global_ver_entry;
-	struct daos_prop_entry	       *owner_grp_entry;
 	struct daos_prop_entry	       *obj_ver_entry;
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
@@ -3566,25 +3656,31 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	uint32_t                        cli_pool_version;
 	bool                            dup_op = false;
 	struct ds_pool_svc_op_val       op_val;
-	bool                            transfer_map    = false;
-	bool                            fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
-	bool                            fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
+	bool                            transfer_map = false;
+	bool                            fi_pass_noreply;
+	bool                            fi_fail_noreply;
 	bool                            fi_pass_nl_noreply;
 	bool                            fi_fail_nl_noreply;
 
 	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
 
+	fi_pass_noreply    = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
+	fi_fail_noreply    = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
 	fi_pass_nl_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY_NEWLDR);
 	fi_fail_nl_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY_NEWLDR);
 
-	rc = pool_svc_lookup_leader(in->pci_op.pi_uuid, &svc,
-				    &out->pco_op.po_hint);
+	rc = pool_svc_lookup_leader(in->pci_op.pi_uuid, &svc, &out->pco_op.po_hint);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	pool_connect_in_get_cred(rpc, &credp);
 	pool_connect_in_get_data(rpc, &flags, &query_bits, &bulk, &cli_pool_version);
+
+	rc = pool_connect_check_cli_pool_version(svc->ps_uuid, svc->ps_global_version,
+						 cli_pool_version);
+	if (rc != 0)
+		goto out_svc;
 
 	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
 		rc = ds_rebuild_query(in->pci_op.pi_uuid, &out->pco_rebuild_st);
@@ -3634,13 +3730,12 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	d_iov_set(&value, NULL, 0);
 	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 	if (rc == 0) {
-		/* found it */
 		if (((struct pool_hdl *)value.iov_buf)->ph_flags == flags) {
 			/*
 			 * The handle already exists; only do the pool map
 			 * transfer.
 			 */
-			skip_update = 1;
+			skip_update = true;
 		} else {
 			/* The existing one does not match the new one. */
 			D_ERROR(DF_UUID": found conflicting pool handle\n",
@@ -3654,103 +3749,22 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	/* Fetch properties, the  ACL and ownership info for access check,
 	 * all properties will update to IV.
 	 */
-	prop_bits = DAOS_PO_QUERY_PROP_ALL;
-	rc = pool_prop_read(&tx, svc, prop_bits, &prop);
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot get access data for pool, "
-			"rc="DF_RC"\n", DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
-		D_GOTO(out_map_version, rc);
+		DL_ERROR(rc, DF_UUID ": cannot read properties", DP_UUID(in->pci_op.pi_uuid));
+		goto out_map_version;
 	}
 	D_ASSERT(prop != NULL);
 
-	global_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
-	D_ASSERT(global_ver_entry != NULL);
-	global_ver = global_ver_entry->dpe_val;
-	/*
-	 * Reject pool connection if old clients try to connect new format pool.
-	 */
-	int diff = DAOS_POOL_GLOBAL_VERSION - cli_pool_version;
-	if (cli_pool_version <= DAOS_POOL_GLOBAL_VERSION) {
-		if (diff >= NUM_POOL_VERSIONS) {
-			rc = -DER_NOTSUPPORTED;
-			DL_ERROR(rc,
-				 DF_UUID ": cannot connect, client supported pool "
-					 "layout version (%u) is more than %u versions smaller "
-					 "than server supported pool layout version(%u), "
-					 "try to upgrade client firstly",
-				 DP_UUID(in->pci_op.pi_uuid), cli_pool_version,
-				 NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
-			goto out_map_version;
-		}
-
-		if (global_ver > cli_pool_version) {
-			rc = -DER_NOTSUPPORTED;
-			DL_ERROR(rc,
-				 DF_UUID ": cannot connect, pool layout version(%u) > "
-					 "max client supported pool layout version(%u), "
-					 "try to upgrade client firstly",
-				 DP_UUID(in->pci_op.pi_uuid), global_ver, cli_pool_version);
-			goto out_map_version;
-		}
-	} else {
-		diff = -diff;
-		if (diff >= NUM_POOL_VERSIONS) {
-			rc = -DER_NOTSUPPORTED;
-			DL_ERROR(rc,
-				 DF_UUID ": cannot connect, client supported pool "
-					 "layout version (%u) is more than %u versions "
-					 "larger than server supported pool layout version(%u), "
-					 "try to upgrade server firstly",
-				 DP_UUID(in->pci_op.pi_uuid), cli_pool_version,
-				 NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
-			goto out_map_version;
-		}
-		/* New clients should be able to access old pools without problem */
-	}
-
-	acl_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
-	D_ASSERT(acl_entry != NULL);
-	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
-
-	owner_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
-	D_ASSERT(owner_entry != NULL);
-	D_ASSERT(owner_entry->dpe_str != NULL);
-
-	owner_grp_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
-	D_ASSERT(owner_grp_entry != NULL);
-	D_ASSERT(owner_grp_entry->dpe_str != NULL);
-
-	owner.user = owner_entry->dpe_str;
-	owner.group = owner_grp_entry->dpe_str;
-
-	obj_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
-	D_ASSERT(obj_ver_entry != NULL);
-	obj_layout_ver = obj_ver_entry->dpe_val;
-
-	/*
-	 * Security capabilities determine the access control policy on this
-	 * pool handle.
-	 */
-	rc = ds_sec_pool_get_capabilities(flags, credp, &owner, acl_entry->dpe_val_ptr, &sec_capas);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": refusing connect attempt for " DF_X64,
-			 DP_UUID(in->pci_op.pi_uuid), flags);
-		D_GOTO(out_map_version, rc);
-	}
-
 	rc = ds_sec_cred_get_origin(credp, &machine);
-
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": unable to retrieve origin", DP_UUID(in->pci_op.pi_uuid));
 		D_GOTO(out_map_version, rc);
 	}
 
-	if (!ds_sec_pool_can_connect(sec_capas)) {
-		rc = -DER_NO_PERM;
-		DL_ERROR(rc, DF_UUID ": permission denied for connect attempt for " DF_X64,
-			 DP_UUID(in->pci_op.pi_uuid), flags);
+	rc = pool_connect_check_perm(svc->ps_uuid, prop, credp, flags, &sec_capas);
+	if (rc != 0)
 		goto out_map_version;
-	}
 
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
@@ -3789,8 +3803,10 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		}
 	}
 
-	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, credp, global_ver,
-				  obj_layout_ver);
+	obj_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
+	D_ASSERT(obj_ver_entry != NULL);
+	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, credp,
+				  svc->ps_global_version, obj_ver_entry->dpe_val);
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC)) {
 		D_DEBUG(DB_MD, DF_UUID": fault injected: DAOS_POOL_CONNECT_FAIL_CORPC\n",
 			DP_UUID(in->pci_op.pi_uuid));
@@ -3807,15 +3823,12 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	D_ALLOC(hdl, sizeof(*hdl) + credp->iov_len);
 	if (hdl == NULL)
 		D_GOTO(out_map_version, rc = -DER_NOMEM);
-
 	hdl->ph_flags     = flags;
 	hdl->ph_sec_capas = sec_capas;
 	/* XXX may be can check pool version to avoid initializing 3 following hdl fields ? */
 	strncpy(hdl->ph_machine, machine, MAXHOSTNAMELEN);
 	hdl->ph_cred_len = credp->iov_len;
 	memcpy(&hdl->ph_cred[0], credp->iov_buf, credp->iov_len);
-
-	nhandles++;
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
 	d_iov_set(&value, hdl,
 		  svc->ps_global_version >= DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED ?
@@ -3826,6 +3839,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
+	nhandles++;
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
@@ -3841,19 +3855,23 @@ out_map_version:
 	rc = pool_op_save(&tx, svc, rpc, handler_version, dup_op, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
+
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0)
 		goto out_lock;
 
 	rc = op_val.ov_rc;
-	if ((rc == 0) && !dup_op) {
+	if (rc != 0)
+		goto out_lock;
+
+	if (!dup_op) {
 		/** update metric */
 		metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 		d_tm_inc_counter(metrics->connect_total, 1);
 		d_tm_inc_gauge(metrics->open_handles, 1);
 	}
 
-	if ((rc == 0) && (query_bits & DAOS_PO_QUERY_SPACE))
+	if (query_bits & DAOS_PO_QUERY_SPACE)
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl, &out->pco_space);
 
 out_lock:
@@ -3862,7 +3880,7 @@ out_lock:
 	if (rc == 0 && transfer_map) {
 		rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc, bulk,
 					      &out->pco_map_buf_size);
-		/** TODO: roll back tx if transfer fails? Perhaps rdb_tx_discard()? */
+		/** TODO: roll back tx if transfer fails? */
 	}
 	if (rc == 0)
 		rc = op_val.ov_rc;
