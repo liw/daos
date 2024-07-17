@@ -3769,21 +3769,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		}
 	}
 
-	obj_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
-	D_ASSERT(obj_ver_entry != NULL);
-	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, credp,
-				  svc->ps_global_version, obj_ver_entry->dpe_val);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC)) {
-		D_DEBUG(DB_MD, DF_UUID": fault injected: DAOS_POOL_CONNECT_FAIL_CORPC\n",
-			DP_UUID(in->pci_op.pi_uuid));
-		rc = -DER_TIMEDOUT;
-	}
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to connect to targets: "DF_RC"\n",
-			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
-		D_GOTO(out_map_version, rc);
-	}
-
 	/* handle did not exist so create it */
 	/* XXX may be can check pool version to avoid allocating too much ? */
 	D_ALLOC(hdl, sizeof(*hdl) + credp->iov_len);
@@ -3823,28 +3808,46 @@ out_map_version:
 	rc = pool_op_save(&tx, svc, rpc, handler_version, dup_op, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
+
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0)
 		goto out_lock;
 
 	rc = op_val.ov_rc;
-	if ((rc == 0) && !dup_op) {
+	if (rc != 0)
+		goto out_lock;
+
+	if (!dup_op) {
 		/** update metric */
 		metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 		d_tm_inc_counter(metrics->connect_total, 1);
 		d_tm_inc_gauge(metrics->open_handles, 1);
 	}
 
-	if ((rc == 0) && (query_bits & DAOS_PO_QUERY_SPACE))
-		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl, &out->pco_space);
+	obj_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
+	D_ASSERT(obj_ver_entry != NULL);
+	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, credp,
+				  svc->ps_global_version, obj_ver_entry->dpe_val);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC)) {
+		D_DEBUG(DB_MD, DF_UUID ": fault injected: DAOS_POOL_CONNECT_FAIL_CORPC\n",
+			DP_UUID(in->pci_op.pi_uuid));
+		rc = -DER_TIMEDOUT;
+	}
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to connect to targets: " DF_RC "\n",
+			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
+		goto out_lock;
+	}
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
+	if (rc == 0 && query_bits & DAOS_PO_QUERY_SPACE)
+		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl, &out->pco_space);
 	if (rc == 0 && transfer_map) {
 		rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc, bulk,
 					      &out->pco_map_buf_size);
-		/** TODO: roll back tx if transfer fails? Perhaps rdb_tx_discard()? */
+		/** TODO: roll back tx if transfer fails? */
 	}
 	if (rc == 0)
 		rc = op_val.ov_rc;
