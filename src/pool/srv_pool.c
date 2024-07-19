@@ -6407,20 +6407,29 @@ cont_rf_check_cb(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *ar
 static void
 pool_svc_rfcheck_ult(void *arg)
 {
-	struct pool_svc	       *svc = container_of(arg, struct pool_svc, ps_rfcheck_sched);
-	int			rc;
+	struct pool_svc_sched *sched = arg;
+	struct pool_svc       *svc   = container_of(sched, struct pool_svc, ps_rfcheck_sched);
+	int                    rc;
 
 	do {
 		/* retry until some one stop the pool svc(rc == 1) or succeed */
-		rc = ds_cont_rdb_iterate(svc->ps_cont_svc, cont_rf_check_cb,
-					 &svc->ps_rfcheck_sched);
+		if (DAOS_FAIL_CHECK(DAOS_POOL_RFCHECK_FAIL))
+			rc = -DER_NOMEM;
+		else
+			rc = ds_cont_rdb_iterate(svc->ps_cont_svc, cont_rf_check_cb,
+						 &svc->ps_rfcheck_sched);
 		if (rc >= 0)
 			break;
+
+		if (sched->psc_canceled) {
+			D_DEBUG(DB_MD, DF_UUID ": canceled\n", DP_UUID(svc->ps_uuid));
+			break;
+		}
 
 		D_DEBUG(DB_MD, DF_UUID" check rf with %d and retry\n",
 			DP_UUID(svc->ps_uuid), rc);
 
-		dss_sleep(0);
+		dss_sleep(1000 /* ms */);
 	} while (1);
 
 	sched_end(&svc->ps_rfcheck_sched);
