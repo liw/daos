@@ -241,7 +241,7 @@ static int
 dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 {
 	struct dtx_req_args	*dra = drr->drr_parent;
-	crt_rpc_t		*req;
+	crt_rpc_t		*req = NULL;
 	crt_endpoint_t		 tgt_ep;
 	crt_opcode_t		 opc;
 	struct dtx_in		*din = NULL;
@@ -281,6 +281,7 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 			D_ASSERTF(rc == 0, "crt_req_set_timeout failed: %d\n", rc);
 		}
 
+		crt_req_addref(req);
 		rc = crt_req_send(req, dtx_req_cb, drr);
 	}
 
@@ -288,6 +289,9 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		  "DTX req for opc %x to %d/%d (req %p future %p) sent epoch "DF_X64,
 		  dra->dra_opc, drr->drr_rank, drr->drr_tag, req, dra->dra_future,
 		  din != NULL ? din->di_epoch : 0);
+
+	if (req != NULL)
+		crt_req_decref(req);
 
 	if (rc != 0 && drr->drr_comp == 0) {
 		drr->drr_comp = 1;
