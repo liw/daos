@@ -237,7 +237,7 @@ rebuild_snap_update_recs(void **state)
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < SNAP_CNT; i++)
-		sprintf(string + strlen(string), "old-snap%d", i);
+		sprintf(string, "old-snap%d", i);
 
 	recx.rx_idx = 0;
 	recx.rx_nr = strlen(string);
