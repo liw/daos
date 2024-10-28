@@ -140,10 +140,12 @@ func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 
 // SystemJoinResp contains the request response.
 type SystemJoinResp struct {
-	Rank       ranklist.Rank
-	State      system.MemberState
-	LocalJoin  bool
-	MapVersion uint32 `json:"map_version"`
+	Rank        ranklist.Rank
+	State       system.MemberState
+	LocalJoin   bool
+	MapVersion  uint32   `json:"map_version"`
+	PoolUuids   []string `json:"pool_uuids"`
+	DataVersion uint64   `json:"data_version"`
 }
 
 func (resp *SystemJoinResp) UnmarshalJSON(data []byte) error {

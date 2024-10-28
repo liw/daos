@@ -149,6 +149,7 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__SetRankReq	*req = NULL;
 	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
+	int			 i;
 	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
@@ -161,8 +162,10 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to set rank to %u and map_version to %u\n", req->rank,
-	       req->map_version);
+	D_INFO("Received request to set rank to %u, map_version to %u, and %zu pools\n", req->rank,
+	       req->map_version, req->n_pool_uuids);
+	for (i = 0; i < req->n_pool_uuids; i++)
+		D_INFO(" %s\n", req->pool_uuids[i]);
 
 	rc = crt_rank_self_set(req->rank, req->map_version);
 	if (rc != 0)
