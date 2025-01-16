@@ -253,49 +253,16 @@ rsvc_hash_fini(void)
  * \param[out]	svc	replicated service
  */
 int
-ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
-	       struct ds_rsvc **svc)
+ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id, struct ds_rsvc **svc)
 {
-	d_list_t       *entry;
-	bool		nonexist = false;
+	d_list_t *entry;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
-	if (entry == NULL) {
-		char	       *path = NULL;
-		struct stat	buf;
-		int		rc;
-
-		/*
-		 * See if the DB exists. If an error prevents us from find that
-		 * out, return -DER_NOTLEADER so that the client tries other
-		 * replicas.
-		 */
-		rc = rsvc_class(class)->sc_locate(id, &path);
-		if (rc != 0)
-			goto out;
-		rc = stat(path, &buf);
-		if (rc != 0) {
-			if (errno == ENOENT) {
-				nonexist = true;
-			} else {
-				char *name = NULL;
-
-				rsvc_class(class)->sc_name(id, &name);
-				D_ERROR("%s: failed to stat %s: %d\n", name,
-					path, errno);
-				if (name != NULL)
-					D_FREE(name);
-			}
-		}
-		D_FREE(path);
-	}
-out:
-	if (nonexist)
-		return -DER_NOTREPLICA;
 	if (entry == NULL)
-		return -DER_NOTLEADER;
+		return -DER_NOTREPLICA;
+
 	*svc = rsvc_obj(entry);
 	return 0;
 }

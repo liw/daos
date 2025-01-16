@@ -297,9 +297,8 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 					 ep);
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (rc_svc == -DER_NOTREPLICA) {
-		/* This may happen when a service replica was destroyed. */
-		D_DEBUG(DB_MD, "service not found reply from rank %u: ",
-			ep->ep_rank);
+		/* This may happen when a service replica was stopped or destroyed. */
+		D_DEBUG(DB_MD, "service not found reply from rank %u: ", ep->ep_rank);
 		rsvc_client_process_error(client, rc_svc, ep);
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID)) {
