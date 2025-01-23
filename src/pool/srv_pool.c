@@ -4154,7 +4154,7 @@ out_lock:
 		rc = ds_pool_lookup_map_bc(svc->ps_pool, rpc->cr_ctx, &map_bc, &map_version);
 		if (rc == 0) {
 			rc = ds_pool_transfer_map_buf(map_bc, rpc, bulk, &out->pco_map_buf_size);
-			ds_pool_put_map_bc(svc->ps_pool, map_bc);
+			ds_pool_put_map_bc(map_bc);
 			/* Ensure the map version matches the map buffer. */
 			out->pco_op.po_map_version = map_version;
 		}
@@ -5102,7 +5102,7 @@ out_lock:
 	if (rc != 0)
 		goto out_svc;
 	rc = ds_pool_transfer_map_buf(map_bc, rpc, bulk, &out->pqo_map_buf_size);
-	ds_pool_put_map_bc(svc->ps_pool, map_bc);
+	ds_pool_put_map_bc(map_bc);
 	if (rc != 0)
 		goto out_svc;
 

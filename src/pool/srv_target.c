@@ -930,6 +930,7 @@ pool_free_ref(struct daos_llink *llink)
 	/** release metrics */
 	ds_pool_metrics_stop(pool);
 
+	ds_pool_put_map_bc(pool->sp_map_bc);
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_free(&pool->sp_mutex);
@@ -1928,16 +1929,9 @@ ds_pool_lookup_map_bc(struct ds_pool *pool, crt_context_t ctx, struct ds_pool_ma
 }
 
 void
-ds_pool_put_map_bc(struct ds_pool *pool, struct ds_pool_map_bc *map_bc)
+ds_pool_put_map_bc(struct ds_pool_map_bc *map_bc)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-
-	/* We could cache this longer, actually. */
-	if (pool->sp_map_bc == map_bc) {
-		map_bc_put(pool->sp_map_bc);
-		pool->sp_map_bc = NULL;
-	}
-
 	map_bc_put(map_bc);
 }
 
@@ -2284,7 +2278,7 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 
 	rc = ds_pool_transfer_map_buf(bc, rpc, in->tmi_map_bulk, &out->tmo_map_buf_size);
 
-	ds_pool_put_map_bc(pool, bc);
+	ds_pool_put_map_bc(bc);
 out_version:
 	out->tmo_op.po_map_version = version;
 out_pool:
