@@ -3673,7 +3673,6 @@ dc_pool_stop_svc(tse_task_t *task)
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		goto out_tpriv;
-		;
 	}
 
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_SVC_STOP, pool->dp_pool,

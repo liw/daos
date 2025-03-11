@@ -92,12 +92,8 @@ cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 				      &out->co_hint);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	if (rc == RSVC_CLIENT_RECHOOSE ||
-	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->co_rc))) {
-		rc = tse_task_reinit(task);
-		if (rc != 0)
-			return rc;
+	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->co_rc)))
 		return RSVC_CLIENT_RECHOOSE;
-	}
 	return RSVC_CLIENT_PROCEED;
 }
 
@@ -108,9 +104,49 @@ struct cont_args {
 };
 
 struct cont_task_priv {
-	uint64_t        rq_time; /* time of the request (hybrid logical clock) */
-	struct dc_cont *cont;    /* client container handle (used by cont_open) */
+	struct d_backoff_seq backoff_seq;
+	uint64_t             rq_time; /* time of the request (hybrid logical clock) */
+	struct dc_cont      *cont;    /* client container handle (used by cont_open) */
 };
+
+static int
+cont_task_create_priv(tse_task_t *task, struct cont_task_priv **tpriv_out)
+{
+	struct cont_task_priv *tpriv;
+
+	D_ASSERT(dc_task_get_priv(task) == NULL);
+
+	D_ALLOC_PTR(tpriv);
+	if (tpriv == NULL)
+		return -DER_NOMEM;
+
+	dc_pool_init_backoff_seq(&tpriv->backoff_seq);
+
+	dc_task_set_priv(task, tpriv);
+
+	*tpriv_out = tpriv;
+	return 0;
+}
+
+static void
+cont_task_destroy_priv(tse_task_t *task)
+{
+	struct cont_task_priv *tpriv = dc_task_get_priv(task);
+
+	D_ASSERT(tpriv != NULL);
+	dc_task_set_priv(task, NULL /* priv */);
+	dc_pool_fini_backoff_seq(&tpriv->backoff_seq);
+	D_FREE(tpriv);
+}
+
+static int
+cont_task_reinit(tse_task_t *task)
+{
+	struct cont_task_priv *tpriv = dc_task_get_priv(task);
+	uint32_t               delay = d_backoff_seq_next(&tpriv->backoff_seq);
+
+	return tse_task_reinit_with_delay(task, delay);
+}
 
 static int
 cont_create_complete(tse_task_t *task, void *data)
@@ -119,8 +155,7 @@ cont_create_complete(tse_task_t *task, void *data)
 	daos_cont_create_t     *args;
 	struct dc_pool	       *pool = arg->pool;
 	struct cont_create_out *out = crt_reply_get(arg->rpc);
-	struct cont_task_priv  *tpriv      = dc_task_get_priv(task);
-	bool                    free_tpriv = true;
+	bool                    reinit     = false;
 	int			rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -128,7 +163,7 @@ cont_create_complete(tse_task_t *task, void *data)
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
-		free_tpriv = false;
+		reinit = true;
 		D_GOTO(out, rc = 0);
 	}
 
@@ -156,10 +191,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
 	daos_prop_free(arg->prop);
-	if (free_tpriv) {
-		D_FREE(tpriv);
-		dc_task_set_priv(task, NULL);
-	}
+	if (reinit)
+		rc = cont_task_reinit(task);
+	else
+		cont_task_destroy_priv(task);
 	return rc;
 }
 
@@ -345,10 +380,9 @@ dc_cont_create(tse_task_t *task)
 		D_GOTO(err_pool, rc);
 
 	if (tpriv == NULL) {
-		D_ALLOC_PTR(tpriv);
-		if (tpriv == NULL)
-			D_GOTO(err_prop, rc = -DER_NOMEM);
-		dc_task_set_priv(task, tpriv);
+		rc = cont_task_create_priv(task, &tpriv);
+		if (rc != 0)
+			goto err_prop;
 	}
 
 	D_DEBUG(DB_MD, DF_UUID": creating "DF_UUIDF"\n",
@@ -388,8 +422,7 @@ err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
+	cont_task_destroy_priv(task);
 err_prop:
 	daos_prop_free(rpc_prop);
 err_pool:
@@ -404,10 +437,9 @@ static int
 cont_destroy_complete(tse_task_t *task, void *data)
 {
 	struct cont_args	*arg = (struct cont_args *)data;
-	struct cont_task_priv   *tpriv      = dc_task_get_priv(task);
 	struct dc_pool		*pool = arg->pool;
 	struct cont_destroy_out	*out = crt_reply_get(arg->rpc);
-	bool                     free_tpriv = true;
+	bool                     reinit     = false;
 	int			 rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -415,7 +447,7 @@ cont_destroy_complete(tse_task_t *task, void *data)
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
-		free_tpriv = false;
+		reinit = true;
 		D_GOTO(out, rc = 0);
 	}
 
@@ -436,10 +468,10 @@ cont_destroy_complete(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
-	if (free_tpriv) {
-		D_FREE(tpriv);
-		dc_task_set_priv(task, NULL);
-	}
+	if (reinit)
+		rc = cont_task_reinit(task);
+	else
+		cont_task_destroy_priv(task);
 	return rc;
 }
 
@@ -481,10 +513,9 @@ dc_cont_destroy(tse_task_t *task)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
 	if (tpriv == NULL) {
-		D_ALLOC_PTR(tpriv);
-		if (tpriv == NULL)
-			D_GOTO(err_pool, rc = -DER_NOMEM);
-		dc_task_set_priv(task, tpriv);
+		rc = cont_task_create_priv(task, &tpriv);
+		if (rc != 0)
+			goto err_pool;
 	}
 
 	D_DEBUG(DB_MD, DF_UUID": destroying %s: force=%d\n",
@@ -526,8 +557,7 @@ err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
+	cont_task_destroy_priv(task);
 err_pool:
 	dc_pool_put(pool);
 err:
@@ -758,15 +788,15 @@ cont_open_complete(tse_task_t *task, void *data)
 	char			 otime_str[32];
 	char			 mtime_str[32];
 	uint32_t		 cli_pm_ver;
-	bool                     free_tpriv = true;
+	bool                     reinit = false;
 	int			 rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->coo_op, task);
-	if (rc < 0)
+	if (rc < 0) {
 		D_GOTO(out, rc);
-	else if (rc == RSVC_CLIENT_RECHOOSE) {
-		free_tpriv = false;
+	} else if (rc == RSVC_CLIENT_RECHOOSE) {
+		reinit = true;
 		D_GOTO(out, rc = 0);
 	}
 
@@ -870,12 +900,13 @@ cont_open_complete(tse_task_t *task, void *data)
 
 out:
 	crt_req_decref(arg->rpc);
-	if (free_tpriv) {
-		dc_cont_put(tpriv->cont);
-		D_FREE(tpriv);
-		dc_task_set_priv(task, NULL);
-	}
 	dc_pool_put(pool);
+	if (reinit) {
+		rc = cont_task_reinit(task);
+	} else {
+		dc_cont_put(tpriv->cont);
+		cont_task_destroy_priv(task);
+	}
 	return rc;
 }
 
@@ -988,10 +1019,9 @@ dc_cont_open(tse_task_t *task)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
 	if (tpriv == NULL) {
-		D_ALLOC_PTR(tpriv);
-		if (tpriv == NULL)
-			D_GOTO(err_pool, rc = -DER_NOMEM);
-		dc_task_set_priv(task, tpriv);
+		rc = cont_task_create_priv(task, &tpriv);
+		if (rc != 0)
+			goto err_pool;
 		tpriv->cont = dc_cont_alloc(uuid);
 		if (tpriv->cont == NULL)
 			D_GOTO(err_tpriv, rc = -DER_NOMEM);
@@ -1011,8 +1041,7 @@ dc_cont_open(tse_task_t *task)
 err_cont:
 	dc_cont_put(tpriv->cont);
 err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
+	cont_task_destroy_priv(task);
 err_pool:
 	dc_pool_put(pool);
 err:
@@ -1034,9 +1063,8 @@ cont_close_complete(tse_task_t *task, void *data)
 	struct cont_close_args	*arg = (struct cont_close_args *)data;
 	struct cont_close_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->cca_pool;
-	struct cont_task_priv   *tpriv      = dc_task_get_priv(task);
 	struct dc_cont		*cont = arg->cca_cont;
-	bool                     free_tpriv = true;
+	bool                     reinit     = false;
 	int			 rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1044,7 +1072,7 @@ cont_close_complete(tse_task_t *task, void *data)
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
-		free_tpriv = false;
+		reinit = true;
 		D_GOTO(out, rc = 0);
 	}
 
@@ -1091,10 +1119,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
 	dc_cont_put(cont);
-	if (free_tpriv) {
-		D_FREE(tpriv);
-		dc_task_set_priv(task, NULL);
-	}
+	if (reinit)
+		rc = cont_task_reinit(task);
+	else
+		cont_task_destroy_priv(task);
 	return rc;
 }
 
@@ -1156,10 +1184,9 @@ dc_cont_close(tse_task_t *task)
 	}
 
 	if (tpriv == NULL) {
-		D_ALLOC_PTR(tpriv);
-		if (tpriv == NULL)
-			D_GOTO(err_pool, rc = -DER_NOMEM);
-		dc_task_set_priv(task, tpriv);
+		rc = cont_task_create_priv(task, &tpriv);
+		if (rc != 0)
+			goto err_pool;
 	}
 
 	ep.ep_grp = pool->dp_sys->sy_group;
@@ -1196,8 +1223,7 @@ err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
+	cont_task_destroy_priv(task);
 err_pool:
 	dc_pool_put(pool);
 err_cont:
@@ -1225,11 +1251,10 @@ cont_query_complete(tse_task_t *task, void *data)
 	struct cont_query_out           *out   = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cqa_pool;
 	struct dc_cont			*cont = arg->cqa_cont;
-	struct cont_task_priv           *tpriv = dc_task_get_priv(task);
 	time_t				 otime_sec, mtime_sec;
 	char				 otime_str[32];
 	char				 mtime_str[32];
-	bool                             free_tpriv = true;
+	bool                             reinit = false;
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1237,7 +1262,7 @@ cont_query_complete(tse_task_t *task, void *data)
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
-		free_tpriv = false;
+		reinit = true;
 		D_GOTO(out, rc = 0);
 	}
 
@@ -1289,10 +1314,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
-	if (free_tpriv) {
-		D_FREE(tpriv);
-		dc_task_set_priv(task, NULL);
-	}
+	if (reinit)
+		rc = cont_task_reinit(task);
+	else
+		cont_task_destroy_priv(task);
 	return rc;
 }
 
@@ -1421,10 +1446,9 @@ dc_cont_query(tse_task_t *task)
 	D_ASSERT(pool != NULL);
 
 	if (tpriv == NULL) {
-		D_ALLOC_PTR(tpriv);
-		if (tpriv == NULL)
-			D_GOTO(err_cont, rc = -DER_NOMEM);
-		dc_task_set_priv(task, tpriv);
+		rc = cont_task_create_priv(task, &tpriv);
+		if (rc != 0)
+			goto err_cont;
 	}
 
 	D_DEBUG(DB_MD, DF_CONT ": querying: hdl=" DF_UUID " proto_ver=%d\n",
@@ -1467,8 +1491,7 @@ err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
+	cont_task_destroy_priv(task);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
@@ -1490,11 +1513,10 @@ cont_set_prop_complete(tse_task_t *task, void *data)
 {
 	struct cont_set_prop_args	*arg = (struct cont_set_prop_args *)
 						data;
-	struct cont_task_priv           *tpriv      = dc_task_get_priv(task);
 	struct cont_prop_set_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cqa_pool;
 	struct dc_cont			*cont = arg->cqa_cont;
-	bool                             free_tpriv = true;
+	bool                             reinit     = false;
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1502,7 +1524,7 @@ cont_set_prop_complete(tse_task_t *task, void *data)
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
-		free_tpriv = false;
+		reinit = true;
 		D_GOTO(out, rc = 0);
 	}
 
@@ -1529,10 +1551,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
-	if (free_tpriv) {
-		D_FREE(tpriv);
-		dc_task_set_priv(task, NULL);
-	}
+	if (reinit)
+		rc = cont_task_reinit(task);
+	else
+		cont_task_destroy_priv(task);
 	return rc;
 }
 
@@ -1607,10 +1629,9 @@ dc_cont_set_prop(tse_task_t *task)
 	}
 
 	if (tpriv == NULL) {
-		D_ALLOC_PTR(tpriv);
-		if (tpriv == NULL)
-			D_GOTO(err_cont, rc = -DER_NOMEM);
-		dc_task_set_priv(task, tpriv);
+		rc = cont_task_create_priv(task, &tpriv);
+		if (rc != 0)
+			goto err_cont;
 	}
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
@@ -1649,8 +1670,7 @@ err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
+	cont_task_destroy_priv(task);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
@@ -1673,11 +1693,10 @@ cont_update_acl_complete(tse_task_t *task, void *data)
 {
 	struct cont_update_acl_args	*arg = (struct cont_update_acl_args *)
 						data;
-	struct cont_task_priv           *tpriv      = dc_task_get_priv(task);
 	struct cont_acl_update_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cua_pool;
 	struct dc_cont			*cont = arg->cua_cont;
-	bool                             free_tpriv = true;
+	bool                             reinit     = false;
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1685,7 +1704,7 @@ cont_update_acl_complete(tse_task_t *task, void *data)
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
-		free_tpriv = false;
+		reinit = true;
 		D_GOTO(out, rc = 0);
 	}
 
@@ -1712,10 +1731,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
-	if (free_tpriv) {
-		D_FREE(tpriv);
-		dc_task_set_priv(task, NULL);
-	}
+	if (reinit)
+		rc = cont_task_reinit(task);
+	else
+		cont_task_destroy_priv(task);
 	return rc;
 }
 
@@ -1742,10 +1761,9 @@ dc_cont_update_acl(tse_task_t *task)
 	D_ASSERT(pool != NULL);
 
 	if (tpriv == NULL) {
-		D_ALLOC_PTR(tpriv);
-		if (tpriv == NULL)
-			D_GOTO(err_cont, rc = -DER_NOMEM);
-		dc_task_set_priv(task, tpriv);
+		rc = cont_task_create_priv(task, &tpriv);
+		if (rc != 0)
+			goto err_cont;
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": updating ACL: hdl="DF_UUID"\n",
@@ -1787,8 +1805,7 @@ err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
+	cont_task_destroy_priv(task);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
@@ -1811,11 +1828,10 @@ cont_delete_acl_complete(tse_task_t *task, void *data)
 {
 	struct cont_delete_acl_args	*arg = (struct cont_delete_acl_args *)
 						data;
-	struct cont_task_priv           *tpriv      = dc_task_get_priv(task);
 	struct cont_acl_delete_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cda_pool;
 	struct dc_cont			*cont = arg->cda_cont;
-	bool                             free_tpriv = true;
+	bool                             reinit     = false;
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1823,7 +1839,7 @@ cont_delete_acl_complete(tse_task_t *task, void *data)
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
-		free_tpriv = false;
+		reinit = true;
 		D_GOTO(out, rc = 0);
 	}
 
@@ -1850,10 +1866,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
-	if (free_tpriv) {
-		D_FREE(tpriv);
-		dc_task_set_priv(task, NULL);
-	}
+	if (reinit)
+		rc = cont_task_reinit(task);
+	else
+		cont_task_destroy_priv(task);
 	return rc;
 }
 
@@ -1880,10 +1896,9 @@ dc_cont_delete_acl(tse_task_t *task)
 	D_ASSERT(pool != NULL);
 
 	if (tpriv == NULL) {
-		D_ALLOC_PTR(tpriv);
-		if (tpriv == NULL)
-			D_GOTO(err_cont, rc = -DER_NOMEM);
-		dc_task_set_priv(task, tpriv);
+		rc = cont_task_create_priv(task, &tpriv);
+		if (rc != 0)
+			goto err_cont;
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": deleting ACL: hdl="DF_UUID"\n",
@@ -1926,8 +1941,7 @@ err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
+	cont_task_destroy_priv(task);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
@@ -2418,8 +2432,8 @@ cont_req_cleanup(enum creq_cleanup_stage stage, tse_task_t *task, bool free_tpri
 		crt_req_decref(args->cra_rpc);
 	case CLEANUP_TASK_PRIV:
 		if (free_tpriv) {
-			D_FREE(args->cra_tpriv);
-			dc_task_set_priv(task, NULL);
+			args->cra_tpriv = NULL;
+			cont_task_destroy_priv(task);
 		}
 	case CLEANUP_POOL:
 		dc_pool_put(args->cra_pool);
@@ -2435,7 +2449,7 @@ cont_req_complete(tse_task_t *task, void *data)
 	struct dc_pool      *pool       = args->cra_pool;
 	struct dc_cont      *cont       = args->cra_cont;
 	struct cont_op_out  *op_out     = crt_reply_get(args->cra_rpc);
-	bool                 free_tpriv = true;
+	bool                 reinit     = false;
 	int                  rc         = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &args->cra_rpc->cr_ep,
@@ -2443,7 +2457,7 @@ cont_req_complete(tse_task_t *task, void *data)
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
-		free_tpriv = false;
+		reinit = true;
 		D_GOTO(out, rc = 0);
 	}
 
@@ -2466,7 +2480,9 @@ cont_req_complete(tse_task_t *task, void *data)
 	if (args->cra_callback != NULL)
 		args->cra_callback(task, data);
 out:
-	cont_req_cleanup(CLEANUP_BULK, task, free_tpriv, args);
+	cont_req_cleanup(CLEANUP_BULK, task, !reinit, args);
+	if (reinit)
+		rc = cont_task_reinit(task);
 	return rc;
 }
 
@@ -2486,12 +2502,11 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 	D_ASSERT(args->cra_pool != NULL);
 
 	if (tpriv == NULL) {
-		D_ALLOC_PTR(tpriv);
-		if (tpriv == NULL) {
+		rc = cont_task_create_priv(task, &tpriv);
+		if (rc != 0) {
 			cont_req_cleanup(CLEANUP_POOL, task, false /* free_tpriv */, args);
-			D_GOTO(out, rc = -DER_NOMEM);
+			goto out;
 		}
-		dc_task_set_priv(task, tpriv);
 	}
 	args->cra_tpriv = tpriv;
 
@@ -3161,16 +3176,18 @@ struct get_oit_oid_arg {
 static int
 cont_get_oit_oid_req_complete(tse_task_t *task, void *data)
 {
-	struct get_oit_oid_arg			*arg = data;
-	struct cont_snap_oit_oid_get_out	*oit_out;
-	int rc;
+	struct get_oit_oid_arg *arg = data;
+	int                     rc;
 
 	rc = cont_req_complete(task, &arg->goo_req);
 	if (rc)
 		return rc;
 
-	oit_out = crt_reply_get(arg->goo_req.cra_rpc);
-	*arg->goo_oid = oit_out->ogo_oid;
+	if (arg->goo_req.cra_tpriv == NULL) {
+		struct cont_snap_oit_oid_get_out *oit_out = crt_reply_get(arg->goo_req.cra_rpc);
+
+		*arg->goo_oid = oit_out->ogo_oid;
+	}
 
 	return 0;
 }
