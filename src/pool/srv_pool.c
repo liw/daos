@@ -7033,17 +7033,28 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 							   inval_tgt_addrs);
 			if (rc != 0)
 				goto out_map;
-			if (src == MUS_DMG && inval_tgt_addrs->pta_number > 0) {
-				/*
-				 * If any invalid ranks/targets were specified here,
-				 * abort the entire request. This will mean the
-				 * operator needs to resubmit the request with
-				 * corrected arguments, which will be easier without
-				 * trying to figure out which arguments were accepted &
-				 * started processing already.
-				 */
-				rc = -DER_NONEXIST;
-				goto out_map;
+			if (inval_tgt_addrs->pta_number > 0) {
+				if (src == MUS_DMG) {
+					/*
+					 * If any invalid ranks/targets were specified here,
+					 * abort the entire request. This will mean the
+					 * operator needs to resubmit the request with
+					 * corrected arguments, which will be easier without
+					 * trying to figure out which arguments were accepted &
+					 * started processing already.
+					 */
+					rc = -DER_NONEXIST;
+					goto out_map;
+				} else {
+					int i;
+
+					for (i = 0; i < inval_tgt_addrs->pta_number; i++)
+						D_DEBUG(DB_MD,
+							DF_UUID
+							": ignore target: rank=%u target=%u\n",
+							inval_tgt_addrs->pta_addrs[i].pta_rank,
+							inval_tgt_addrs->pta_addrs[i].pta_target);
+				}
 			}
 		}
 	}
