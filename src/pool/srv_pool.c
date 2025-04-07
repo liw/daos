@@ -1541,10 +1541,25 @@ handle_event(struct pool_svc *svc, struct pool_svc_event_set *event_set)
 	       DP_PS_EVENT_SET(event_set));
 
 	if (!pool_disable_exclude) {
-		rc = pool_svc_exclude_ranks(svc, event_set);
+		bool exclude;
+		bool rebuild;
+
+		/* Read pool.self_heal. */
+
+		rc = ds_mgmt_get_self_heal(&exclude, &rebuild);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_UUID ": failed to exclude ranks", DP_UUID(svc->ps_uuid));
+			DL_ERROR(rc, DF_UUID ": failed to get system self-heal properties",
+				 DP_UUID(svc->ps_uuid));
 			return rc;
+		}
+
+		if (exclude) {
+			rc = pool_svc_exclude_ranks(svc, event_set);
+			if (rc != 0) {
+				DL_ERROR(rc, DF_UUID ": failed to exclude ranks",
+					 DP_UUID(svc->ps_uuid));
+				return rc;
+			}
 		}
 	}
 

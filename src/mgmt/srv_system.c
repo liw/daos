@@ -369,6 +369,55 @@ ds_mgmt_svc_put(struct mgmt_svc *svc)
 	ds_rsvc_put_leader(&svc->ms_rsvc);
 }
 
+/**
+ * Get the self-heal properties from the MS.
+ *
+ * \param exclude	[out]	whether exclude is enabled
+ * \param rebuild	[out]	whether rebuild is enabled
+ */
+int
+ds_mgmt_get_self_heal(bool *exclude, bool *rebuild)
+{
+	Srv__NotifyReadyReq	req = SRV__NOTIFY_READY_REQ__INIT;
+	uint8_t		       *reqb;
+	size_t			reqb_size;
+	Drpc__Response	       *dresp;
+	uint64_t		incarnation;
+	int			rc;
+
+	req.incarnation = incarnation;
+	req.nctxs = DSS_CTX_NR_TOTAL;
+	/* Do not free, this string is managed by the dRPC listener */
+	req.drpclistenersock = drpc_listener_socket_path;
+	req.instanceidx = dss_instance_idx;
+	req.ntgts = dss_tgt_nr;
+	req.check_mode = check_mode;
+
+	reqb_size = srv__notify_ready_req__get_packed_size(&req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL)
+		D_GOTO(out_uri, rc = -DER_NOMEM);
+	srv__notify_ready_req__pack(&req, reqb);
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_SELF_HEAL, reqb,
+			   reqb_size, 0 /* flags */, &dresp);
+	if (rc != 0)
+		goto out_reqb;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		rc = -DER_IO;
+	}
+
+	drpc_response_free(dresp);
+out_reqb:
+	D_FREE(reqb);
+out_uri:
+	D_FREE(req.uri);
+out:
+	return rc;
+}
+
 int
 ds_mgmt_system_module_init(void)
 {
