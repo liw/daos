@@ -20,6 +20,7 @@
  *           A-key rdb_mc_term		// term
  *           A-key rdb_mc_vote		// vote for term
  *           A-key rdb_mc_lc		// log container record
+ *           A-key rdb_mc_node_id_next	// result for next node ID allocation
  *     Container <lc_uuid>		// log container (LC)
  *       Object RDB_LC_ATTRS		// attribute object
  *         D-key rdb_dkey
@@ -72,10 +73,13 @@
 #define RDB_LAYOUT_H
 
 /* Default layout version */
-#define RDB_LAYOUT_VERSION 1
+#define RDB_LAYOUT_VERSION 2
 
 /* Lowest compatible layout version */
 #define RDB_LAYOUT_VERSION_LOW 1
+
+/* Layout version that introduces non-rank, allocated node IDs */
+#define RDB_LAYOUT_VERSION_NODE_ID 2
 
 /*
  * Object ID
@@ -126,6 +130,7 @@ extern d_iov_t rdb_mc_term;		/* uint64_t */
 extern d_iov_t rdb_mc_vote;		/* int */
 extern d_iov_t rdb_mc_lc;		/* rdb_lc_record */
 extern d_iov_t rdb_mc_slc;		/* rdb_lc_record */
+extern d_iov_t rdb_mc_node_id_next;	/* uint32_t */
 
 /* Log container record */
 struct rdb_lc_record {
@@ -138,6 +143,9 @@ struct rdb_lc_record {
 	uint64_t		dlr_seq;	/* last chunk sequence number */
 	struct rdb_anchor	dlr_anchor;	/* last chunk anchor */
 };
+
+/* Initial value for rdb_mc_node_id_next */
+#define RDB_MC_NODE_ID_NEXT_INIT 1
 
 /* Log container (LC) *********************************************************/
 
@@ -154,7 +162,7 @@ struct rdb_lc_record {
 extern d_iov_t rdb_lc_entry_header;	/* rdb_entry */
 extern d_iov_t rdb_lc_entry_data;	/* uint8_t[] */
 extern d_iov_t rdb_lc_nreplicas;	/* uint8_t */
-extern d_iov_t rdb_lc_replicas;		/* uint32_t[] */
+extern d_iov_t rdb_lc_replicas;		/* rdb_node_data[] */
 extern d_iov_t rdb_lc_oid_next;		/* rdb_oid_t (classless) */
 extern d_iov_t rdb_lc_root;		/* rdb_oid_t */
 
@@ -163,6 +171,12 @@ struct rdb_entry {
 	uint64_t	dre_term;
 	uint32_t	dre_type;
 	uint32_t	dre_size;	/* of entry data */
+};
+
+/* Data of a replica in rdb_lc_replicas and configuration log entry */
+struct rdb_node_data {
+	raft_node_id_t	dnd_node_id;
+	d_rank_t 	dnd_rank;
 };
 
 #endif /* RDB_LAYOUT_H */

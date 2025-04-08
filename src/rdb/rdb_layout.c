@@ -21,6 +21,7 @@ RDB_STRING_KEY(rdb_mc_, term);
 RDB_STRING_KEY(rdb_mc_, vote);
 RDB_STRING_KEY(rdb_mc_, lc);
 RDB_STRING_KEY(rdb_mc_, slc);
+RDB_STRING_KEY(rdb_mc_, node_id_next);
 
 RDB_STRING_KEY(rdb_lc_, oid_next);
 RDB_STRING_KEY(rdb_lc_, entry_header);
