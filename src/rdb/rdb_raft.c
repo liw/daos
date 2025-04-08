@@ -1057,9 +1057,12 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, raft_term_t term,
 static d_rank_t
 rdb_raft_cfg_entry_rank(raft_entry_t *entry)
 {
+	struct rdb_node_data *data;
+
 	D_ASSERT(entry->data.buf != NULL);
-	D_ASSERTF(entry->data.len == sizeof(d_rank_t), "%u\n", entry->data.len);
-	return *((d_rank_t *)entry->data.buf);
+	D_ASSERTF(entry->data.len == sizeof(*data), "%u\n", entry->data.len);
+	data = entry->data.buf;
+	return data->dnd_rank;
 }
 
 /* See rdb_raft_update_node. */
@@ -1419,13 +1422,24 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	return 0;
 }
 
+static inline raft_node_id_t
+rdb_raft_node_id(struct rdb_node_data *data)
+{
+	return ((raft_node_id_t)data->dnd_rank << 32) | data->dnd_gen;
+}
+
 static raft_node_id_t
 rdb_raft_cb_log_get_node_id(raft_server_t *raft, void *arg, raft_entry_t *entry,
 			    raft_index_t index)
 {
+	struct rdb_node_data *data;
+
 	D_ASSERTF(raft_entry_is_cfg_change(entry), "index=%ld type=%s\n", index,
 		  rdb_raft_entry_type_str(entry->type));
-	return rdb_raft_cfg_entry_rank(entry);
+	D_ASSERT(entry->data.buf != NULL);
+	D_ASSERTF(entry->data.len == sizeof(*data), "%u\n", entry->data.len);
+	data = entry->data.buf;
+	return rdb_raft_node_id(data);
 }
 
 static void
@@ -2104,14 +2118,20 @@ out:
 int
 rdb_raft_add_replica(struct rdb *db, d_rank_t rank)
 {
-	msg_entry_t	 entry = {};
-	int		 result;
-	int		 rc;
+	msg_entry_t          entry = {};
+	struct rdb_node_data data;
+	int                  result;
+	int                  rc;
 
 	D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n", DP_DB(db), rank);
-	entry.type = RAFT_LOGTYPE_ADD_NODE;
-	entry.data.buf = &rank;
-	entry.data.len = sizeof(d_rank_t);
+
+	data.dnd_rank = rank;
+	data.dnd_gen  = 0;
+
+	entry.type     = RAFT_LOGTYPE_ADD_NODE;
+	entry.data.buf = &data;
+	entry.data.len = sizeof(data);
+
 	rc = rdb_raft_append_apply_internal(db, &entry, &result);
 	return (rc != 0) ? rc : result;
 }
@@ -2119,14 +2139,20 @@ rdb_raft_add_replica(struct rdb *db, d_rank_t rank)
 int
 rdb_raft_remove_replica(struct rdb *db, d_rank_t rank)
 {
-	msg_entry_t	 entry = {};
-	int		 result;
-	int		 rc;
+	msg_entry_t          entry = {};
+	struct rdb_node_data data;
+	int                  result;
+	int                  rc;
 
 	D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n", DP_DB(db), rank);
-	entry.type = RAFT_LOGTYPE_REMOVE_NODE;
-	entry.data.buf = &rank;
-	entry.data.len = sizeof(d_rank_t);
+
+	data.dnd_rank = rank;
+	data.dnd_gen  = 0;
+
+	entry.type     = RAFT_LOGTYPE_REMOVE_NODE;
+	entry.data.buf = &data;
+	entry.data.len = sizeof(data);
+
 	rc = rdb_raft_append_apply_internal(db, &entry, &result);
 	return (rc != 0) ? rc : result;
 }

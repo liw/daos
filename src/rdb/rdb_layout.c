@@ -17,6 +17,7 @@ RDB_STRING_KEY(rdb_, dkey);
 
 RDB_STRING_KEY(rdb_mc_, uuid);
 RDB_STRING_KEY(rdb_mc_, version);
+RDB_STRING_KEY(rdb_mc_, node_id);
 RDB_STRING_KEY(rdb_mc_, term);
 RDB_STRING_KEY(rdb_mc_, vote);
 RDB_STRING_KEY(rdb_mc_, lc);
@@ -27,4 +28,5 @@ RDB_STRING_KEY(rdb_lc_, entry_header);
 RDB_STRING_KEY(rdb_lc_, entry_data);
 RDB_STRING_KEY(rdb_lc_, nreplicas);
 RDB_STRING_KEY(rdb_lc_, replicas);
+RDB_STRING_KEY(rdb_lc_, node_gen_next);
 RDB_STRING_KEY(rdb_lc_, root);

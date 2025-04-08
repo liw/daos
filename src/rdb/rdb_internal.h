@@ -84,6 +84,7 @@ struct rdb {
 	void		       *d_arg;		/* for d_cbs callbacks */
 	struct daos_lru_cache  *d_kvss;		/* rdb_kvs cache */
 	daos_handle_t		d_pool;		/* VOS pool */
+	uint32_t		d_version;	/* of DB layout */
 	struct rdb_chkpt_record d_chkpt_record; /* pool checkpoint information */
 	ABT_thread              d_chkptd;       /* thread handle for pool checkpoint daemon */
 	ABT_mutex               d_chkpt_mutex;  /* mutex for checkpoint synchronization */

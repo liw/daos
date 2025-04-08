@@ -17,6 +17,7 @@
  *         D-key rdb_dkey
  *           A-key rdb_mc_uuid		// <db_uuid> (see rdb_create())
  *           A-key rdb_mc_version	// layout version
+ *           A-key rdb_mc_node_id	// node ID
  *           A-key rdb_mc_term		// term
  *           A-key rdb_mc_vote		// vote for term
  *           A-key rdb_mc_lc		// log container record
@@ -27,6 +28,7 @@
  *           A-key rdb_lc_entry_data	// log entry data
  *           A-key rdb_lc_nreplicas	// number of replicas
  *           A-key rdb_lc_replicas	// replica ranks
+ *           A-key rdb_lc_node_gen_next	// result for next node generation
  *           A-key rdb_lc_oid_next	// result for next object ID allocation
  *           A-key rdb_lc_root		// <root_oid>
  *       Object <root_oid>		// root KVS
@@ -72,10 +74,13 @@
 #define RDB_LAYOUT_H
 
 /* Default layout version */
-#define RDB_LAYOUT_VERSION 1
+#define RDB_LAYOUT_VERSION 2
 
 /* Lowest compatible layout version */
 #define RDB_LAYOUT_VERSION_LOW 1
+
+/* Layout version that introduces node IDs with generations */
+#define RDB_LAYOUT_VERSION_NODE_GEN 2
 
 /*
  * Object ID
@@ -122,6 +127,7 @@ struct rdb_anchor {
  */
 extern d_iov_t rdb_mc_uuid;		/* uuid_t */
 extern d_iov_t rdb_mc_version;		/* uint32_t */
+extern d_iov_t rdb_mc_node_id;		/* uint64_t */
 extern d_iov_t rdb_mc_term;		/* uint64_t */
 extern d_iov_t rdb_mc_vote;		/* int */
 extern d_iov_t rdb_mc_lc;		/* rdb_lc_record */
@@ -147,6 +153,9 @@ struct rdb_lc_record {
 /* Attribute object ID */
 #define RDB_LC_ATTRS (RDB_OID_CLASS_GENERIC | 1)
 
+/* Initial value for rdb_lc_node_gen_next */
+#define RDB_LC_NODE_GEN_NEXT_INIT 1
+
 /* Initial value for rdb_lc_oid_next (classless) */
 #define RDB_LC_OID_NEXT_INIT 2
 
@@ -154,7 +163,8 @@ struct rdb_lc_record {
 extern d_iov_t rdb_lc_entry_header;	/* rdb_entry */
 extern d_iov_t rdb_lc_entry_data;	/* uint8_t[] */
 extern d_iov_t rdb_lc_nreplicas;	/* uint8_t */
-extern d_iov_t rdb_lc_replicas;		/* uint32_t[] */
+extern d_iov_t rdb_lc_replicas;		/* rdb_node_data[] */
+extern d_iov_t rdb_lc_node_gen_next;	/* uint32_t */
 extern d_iov_t rdb_lc_oid_next;		/* rdb_oid_t (classless) */
 extern d_iov_t rdb_lc_root;		/* rdb_oid_t */
 
@@ -163,6 +173,12 @@ struct rdb_entry {
 	uint64_t	dre_term;
 	uint32_t	dre_type;
 	uint32_t	dre_size;	/* of entry data */
+};
+
+/* Data of a replica in rdb_lc_replicas and configuration log entry */
+struct rdb_node_data {
+	d_rank_t dnd_rank;
+	uint32_t dnd_gen;
 };
 
 #endif /* RDB_LAYOUT_H */
