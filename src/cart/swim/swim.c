@@ -389,6 +389,11 @@ swim_member_suspect(struct swim_context *ctx, swim_id_t from, swim_id_t id, uint
 	struct swim_item		*item;
 	int				 rc;
 
+	if (ctx->sc_outage) {
+		SWIM_INFO("ignore suspect %lu %lu from %lu due to outage\n", id, nr, from);
+		return 0;
+	}
+
 	/* if there is no suspicion timeout, just kill the member */
 	if (swim_suspect_timeout_get() == 0)
 		return swim_member_dead(ctx, from, id, nr);
@@ -825,6 +830,46 @@ swim_net_glitch_update(struct swim_context *ctx, swim_id_t id, uint64_t delay)
 		SWIM_ERROR("%lu: A network glitch of %lu with %lu ms delay"
 			   " is detected.\n", self_id, id, delay);
 	return rc;
+}
+
+void
+swim_enter_outage(struct swim_context *ctx)
+{
+	bool entered = false;
+
+	swim_ctx_lock(ctx);
+	if (!ctx->sc_outage) {
+		struct swim_item *item;
+
+		ctx->sc_outage = 1;
+
+		/* Drop all suspects. */
+		TAILQ_FOREACH(item, &ctx->sc_suspects, si_link)
+		{
+			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
+			D_FREE(item);
+		}
+
+		entered = true;
+	}
+	swim_ctx_unlock(ctx);
+	if (entered)
+		SWIM_INFO("entered outage mode\n");
+}
+
+void
+swim_leave_outage(struct swim_context *ctx)
+{
+	bool left = false;
+
+	swim_ctx_lock(ctx);
+	if (ctx->sc_outage) {
+		ctx->sc_outage = 0;
+		left = true;
+	}
+	swim_ctx_unlock(ctx);
+	if (left)
+		SWIM_INFO("left outage mode\n");
 }
 
 static uint64_t

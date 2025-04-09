@@ -397,6 +397,8 @@ crt_swim_update_last_unpack_hlc(struct crt_swim_membs *csm, uint64_t hlc)
 	if (csm->csm_last_unpack_hlc < hlc)
 		csm->csm_last_unpack_hlc = hlc;
 	crt_swim_csm_unlock(csm);
+
+	swim_leave_outage(csm->csm_ctx);
 }
 
 static void crt_swim_srv_cb(crt_rpc_t *rpc)
@@ -1067,6 +1069,7 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 					"%lu.%lu sec > expected %lu.%lu sec).\n",
 					delay / 1000, delay % 1000, max_delay / 1000,
 					max_delay % 1000);
+				swim_enter_outage(csm->csm_ctx);
 				swim_net_glitch_update(csm->csm_ctx, self_id, delay);
 				csm->csm_last_unpack_hlc = hlc2;
 			}
