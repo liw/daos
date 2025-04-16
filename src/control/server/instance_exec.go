@@ -221,7 +221,8 @@ func (ei *EngineInstance) Run(ctx context.Context) {
 			case runnerExit := <-runnerExitCh:
 				ei.handleExit(ctx, runnerExit.PID, runnerExit.Error)
 				runnerExitCh = nil // next runner will reset this
-				if restartRequested {
+				if restartRequested || runnerExit.Error != nil {
+					ei.log.Infof("restarting engine: %v", runnerExit.Error)
 					go ei.requestStart(ctx)
 					restartRequested = false
 				}
