@@ -769,8 +769,9 @@ enum dss_drpc_call_flag {
 	DSS_DRPC_NO_SCHED	= 2
 };
 
-int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
-		  unsigned int flags, Drpc__Response **resp);
+int
+dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size, unsigned int flags,
+	      bool (*abort)(void *arg), void *abort_arg, Drpc__Response **resp);
 
 /** Status of a chore */
 enum dss_chore_status {

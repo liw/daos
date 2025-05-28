@@ -1754,10 +1754,10 @@ ds_pool_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source 
 			DP_UUID(svc->ps_uuid), rank, incarnation, src, type, DP_RC(rc));
 }
 
-static int pool_svc_check_node_status(struct pool_svc *svc);
+static int pool_svc_check_node_status(struct pool_svc *svc, uint64_t sys_self_heal);
 
 static int
-init_events(struct pool_svc *svc)
+init_events(struct pool_svc *svc, uint64_t sys_self_heal)
 {
 	struct pool_svc_events *events = &svc->ps_events;
 	int			rc;
@@ -1782,7 +1782,7 @@ init_events(struct pool_svc *svc)
 	 * appear twice in the event queue: one queued by the event callback,
 	 * and one queued by the recovery.
 	 */
-	rc = pool_svc_check_node_status(svc);
+	rc = pool_svc_check_node_status(svc, sys_self_heal);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create event handler: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -2130,7 +2130,7 @@ ds_pool_svc_rf_from_nreplicas(int nreplicas)
  * fix it.
  */
 static int
-pool_svc_check_node_status(struct pool_svc *svc)
+pool_svc_check_node_status(struct pool_svc *svc, uint64_t sys_self_heal)
 {
 	struct pool_domain     *doms;
 	int			doms_cnt;
@@ -2139,6 +2139,12 @@ pool_svc_check_node_status(struct pool_svc *svc)
 
 	if (pool_disable_exclude) {
 		D_DEBUG(DB_MD, DF_UUID": skip: exclusion disabled\n", DP_UUID(svc->ps_uuid));
+		return 0;
+	}
+
+	if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE)) {
+		D_DEBUG(DB_MD, DF_UUID ": pool_exclude disabled in sys_self_heal\n",
+			DP_UUID(svc->ps_uuid));
 		return 0;
 	}
 
@@ -2321,10 +2327,24 @@ static int pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map,
 				    uint32_t map_version_for, bool sync_remove);
 static void pool_svc_rfcheck_ult(void *arg);
 
+static bool
+abort_step_up(void *arg)
+{
+	struct pool_svc *svc = arg;
+	uint64_t         term;
+	bool             is_leader;
+
+	is_leader = rdb_is_leader(svc->ps_rsvc.s_db, &term);
+	if (!is_leader || svc->ps_rsvc.s_term != term)
+		return true;
+	return false;
+}
+
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
+	uint64_t		sys_self_heal;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version = 0;
 	uuid_t                  srv_pool_hdl;
@@ -2341,15 +2361,17 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 * If this is the only voting replica, it may have become the leader
 	 * without doing any RPC. The primary group may have yet to be
 	 * initialized by the MS. Proceeding with such a primary group may
-	 * result in unnecessary rank exclusions (see the
+	 * result in unnecessary rank exclusions (see the init_events ->
 	 * pool_svc_check_node_status call below). Wait for the primary group
 	 * initialization by retrying the leader election (rate-limited by
 	 * rdb_timerd). (If there's at least one other voting replica, at least
 	 * one RPC must have been done, so the primary group must have been
 	 * initialized at this point.)
 	 */
-	if (!primary_group_initialized())
-		return -DER_GRPVER;
+	if (!primary_group_initialized()) {
+		rc = -DER_GRPVER;
+		goto out;
+	}
 
 	rc =
 	    read_db_for_stepping_up(svc, &map_buf, &map_version, &prop, srv_pool_hdl, srv_cont_hdl);
@@ -2372,7 +2394,21 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		goto out;
 	cont_svc_up = true;
 
-	rc = init_events(svc);
+#if 1
+	if (svc->ps_rsvc.s_term > 1) {
+		D_INFO("sleep");
+		dss_sleep(30000);
+		D_INFO("wake up");
+	}
+#endif
+	rc = ds_mgmt_get_self_heal_policy(abort_step_up, svc, &sys_self_heal);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to get self-heal policy",
+			DP_UUID(svc->ps_uuid));
+		goto out;
+	}
+
+	rc = init_events(svc, sys_self_heal);
 	if (rc != 0)
 		goto out;
 	events_initialized = true;
@@ -2438,7 +2474,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal);
 	if (rc != 0)
 		goto out;
 
@@ -6829,7 +6865,7 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*fun
 	 * and has already called sched_cancel_and_wait.
 	 */
 	state = ds_rsvc_get_state(&svc->ps_rsvc);
-	if (state == DS_RSVC_DRAINING) {
+	if (state == DS_RSVC_STEPPING_DOWN) {
 		D_DEBUG(DB_MD, DF_UUID": end: service %s\n", DP_UUID(svc->ps_uuid),
 			ds_rsvc_state_str(state));
 		return -DER_OP_CANCELED;
@@ -7453,6 +7489,24 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	char				*env;
 	daos_epoch_t			rebuild_eph = d_hlc_get();
 	uint64_t			delay = 2;
+	uint64_t                         sys_self_heal = 0;
+
+	if (src == MUS_SWIM) {
+		D_ASSERTF(opc == MAP_EXCLUDE, "unexpected opc %u from source %d\n",
+			  opc, src);
+		rc = ds_mgmt_get_self_heal_policy(abort_step_up, svc, &sys_self_heal);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to get self-heal policy",
+				DP_UUID(svc->ps_uuid));
+			goto out;
+		}
+		if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE)) {
+			D_DEBUG(DB_MD, DF_UUID ": pool_exculde disabled in sys_self_heal\n",
+				DP_UUID(svc->ps_uuid));
+			rc = 0;
+			goto out;
+		}
+	}
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains, &target_list, list,
@@ -7473,6 +7527,13 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc = 0);
 	}
 	d_freeenv_str(&env);
+
+	if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
+		D_DEBUG(DB_MD, DF_UUID ": pool_rebuild disabled in sys_self_heal\n",
+			DP_UUID(svc->ps_uuid));
+		rc = 0;
+		goto out;
+	}
 
 	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
 	if (rc)
@@ -9070,4 +9131,16 @@ ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool)
 
 	ds_rsvc_put(rsvc);
 	return rc;
+}
+
+bool
+ds_pool_self_heal_exclude_enabled(uint64_t pool_self_heal, uint64_t sys_self_heal)
+{
+	return true;
+}
+
+bool
+ds_pool_self_heal_rebuild_enabled(uint64_t pool_self_heal, uint64_t sys_self_heal)
+{
+	return true;
 }

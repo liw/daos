@@ -142,8 +142,8 @@ test_drpc_call_sockfile_chmod_fails(void **state)
 
 	fchmod_return = -EACCES;
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
-			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, NULL /* req */,
+			   0 /* req_size */, 0 /* flags */, NULL /* abort */, NULL /* abort_arg */,
 			   &resp);
 	assert_rc_equal(rc, -DER_NO_PERM);
 
@@ -163,8 +163,8 @@ test_drpc_call_connect_fails(void **state)
 
 	connect_return = -EACCES;
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
-			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, NULL /* req */,
+			   0 /* req_size */, 0 /* flags */, NULL /* abort */, NULL /* abort_arg */,
 			   &resp);
 	assert_rc_equal(rc, -DER_NO_PERM);
 
@@ -184,8 +184,8 @@ test_drpc_call_sendmsg_fails(void **state)
 
 	sendmsg_return = -EACCES;
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
-			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, NULL /* req */,
+			   0 /* req_size */, 0 /* flags */, NULL /* abort */, NULL /* abort_arg */,
 			   &resp);
 	assert_rc_equal(rc, -DER_NO_PERM);
 

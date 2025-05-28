@@ -40,4 +40,11 @@ ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *ranks);
 int
 ds_mgmt_tgt_pool_shard_destroy(uuid_t pool_uuid, int shard_idx, d_rank_t rank);
 
+#define DS_MGMT_SELF_HEAL_EXCLUDE      (1ULL << 0) /* self_heal.exclude */
+#define DS_MGMT_SELF_HEAL_POOL_EXCLUDE (1ULL << 1) /* self_heal.pool_exclude */
+#define DS_MGMT_SELF_HEAL_POOL_REBUILD (1ULL << 2) /* self_heal.pool_rebuild */
+
+int
+ds_mgmt_get_self_heal_policy(bool (*abort)(void *arg), void *abort_arg, uint64_t *policy);
+
 #endif /* __MGMT_SRV_H__ */

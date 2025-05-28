@@ -87,9 +87,10 @@ void ds_rsvc_class_unregister(enum ds_rsvc_class_id id);
 
 /** Replicated service state in ds_rsvc.s_term */
 enum ds_rsvc_state {
+	DS_RSVC_STEPPING_UP,	/**< stepping up */
 	DS_RSVC_UP_EMPTY,	/**< up but DB newly-created and empty */
 	DS_RSVC_UP,		/**< up and ready to serve */
-	DS_RSVC_DRAINING,	/**< stepping down */
+	DS_RSVC_STEPPING_DOWN,	/**< stepping down */
 	DS_RSVC_DOWN		/**< down */
 };
 

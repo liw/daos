@@ -90,8 +90,8 @@ out:
  * drpc_response_free.
  */
 int
-dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
-	      unsigned int flags, Drpc__Response **resp)
+dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size, unsigned int flags,
+	      bool (*abort)(void *arg), void *abort_arg, Drpc__Response **resp)
 {
 	struct dss_drpc_thread_arg	 arg;
 	struct sched_req_attr		 attr = {0};
@@ -138,7 +138,7 @@ dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 	do {
 		sched_req_sleep(sched_req, d_backoff_seq_next(&backoff_seq));
 		rc = pthread_tryjoin_np(thread, &thread_rc);
-	} while (rc == EBUSY);
+	} while (rc == EBUSY && (abort == NULL || !abort(abort_arg)));
 	/*
 	 * The pthread_tryjoin_np call is expected to return either EBUSY or 0,
 	 * unless there is a bug somewhere affecting its internal logic. If the
@@ -185,8 +185,8 @@ drpc_notify_ready(bool check_mode)
 		D_GOTO(out_uri, rc = -DER_NOMEM);
 	srv__notify_ready_req__pack(&req, reqb);
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, reqb,
-			   reqb_size, DSS_DRPC_NO_SCHED, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, reqb, reqb_size,
+			   DSS_DRPC_NO_SCHED, NULL /* abort */, NULL /* abort_arg */, &dresp);
 	if (rc != 0)
 		goto out_reqb;
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
@@ -230,8 +230,8 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 		D_GOTO(out_uuid, rc = -DER_NOMEM);
 	srv__get_pool_svc_req__pack(&gps_req, req);
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_POOL_SVC, req,
-			   req_size, 0 /* flags */, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_POOL_SVC, req, req_size,
+			   0 /* flags */, NULL /* abort */, NULL /* abort_arg */, &dresp);
 	if (rc != 0)
 		goto out_req;
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
@@ -308,8 +308,8 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 		D_GOTO(out_label, rc = -DER_NOMEM);
 	srv__pool_find_by_label_req__pack(&frq, req);
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_POOL_FIND_BYLABEL,
-			   req, req_size, 0 /* flags */, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_POOL_FIND_BYLABEL, req, req_size,
+			   0 /* flags */, NULL /* abort */, NULL /* abort_arg */, &dresp);
 	if (rc != 0)
 		goto out_req;
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
@@ -391,7 +391,7 @@ ds_get_pool_list(uint64_t *npools, daos_mgmt_pool_info_t *pools)
 	srv__list_pools_req__pack(&lp_req, req);
 
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_LIST_POOLS, req, req_size,
-			   0 /* flags */, &dresp);
+			   0 /* flags */, NULL /* abort */, NULL /* abort_arg */, &dresp);
 	if (rc != 0)
 		goto out_req;
 	if (dresp->status != DRPC__STATUS__SUCCESS) {

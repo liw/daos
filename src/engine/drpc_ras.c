@@ -222,9 +222,9 @@ send_event(Shared__RASEvent *evt, bool wait_for_resp)
 		D_GOTO(out, rc = -DER_NOMEM);
 	shared__cluster_event_req__pack(&req, reqb);
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_CLUSTER_EVENT, reqb,
-			   reqb_size, wait_for_resp ? 0 : DSS_DRPC_NO_RESP,
-			   wait_for_resp ? &dresp : NULL);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_CLUSTER_EVENT, reqb, reqb_size,
+			   wait_for_resp ? 0 : DSS_DRPC_NO_RESP, NULL /* abort */,
+			   NULL /* abort_arg */, wait_for_resp ? &dresp : NULL);
 	if (rc != 0)
 		goto out_reqb;
 	if (wait_for_resp) {
@@ -402,7 +402,8 @@ ds_chk_listpool_upcall(struct chk_list_pool **clp)
 	if (rc < 0)
 		goto out_req;
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_LIST_POOL, reqb, size, 0, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_LIST_POOL, reqb, size, 0,
+			   NULL /* abort */, NULL /* abort_arg */, &dresp);
 	if (rc != 0)
 		goto out_req;
 
@@ -493,7 +494,8 @@ ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svc
 	if (rc < 0)
 		goto out_req;
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_REG_POOL, reqb, size, 0, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_REG_POOL, reqb, size, 0,
+			   NULL /* abort */, NULL /* abort_arg */, &dresp);
 	if (rc != 0)
 		goto out_req;
 
@@ -543,7 +545,8 @@ ds_chk_deregpool_upcall(uint64_t seq, uuid_t uuid)
 	if (rc < 0)
 		goto out_req;
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_DEREG_POOL, reqb, size, 0, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_DEREG_POOL, reqb, size, 0,
+			   NULL /* abort */, NULL /* abort_arg */, &dresp);
 	if (rc != 0)
 		goto out_req;
 
@@ -592,7 +595,8 @@ ds_chk_report_upcall(void *rpt)
 	if (rc < 0)
 		goto out_req;
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_REPORT, reqb, size, 0, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_REPORT, reqb, size, 0, NULL /* abort */,
+			   NULL /* abort_arg */, &dresp);
 	if (rc != 0)
 		goto out_req;
 

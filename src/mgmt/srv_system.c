@@ -370,6 +370,88 @@ ds_mgmt_svc_put(struct mgmt_svc *svc)
 }
 
 int
+ds_mgmt_get_self_heal_policy(bool (*abort)(void *arg), void *abort_arg, uint64_t *policy)
+{
+#if 0
+	Srv__NotifyReadyReq	req = SRV__NOTIFY_READY_REQ__INIT;
+	uint8_t		       *reqb;
+	size_t			reqb_size;
+	Drpc__Response	       *dresp;
+	uint64_t		incarnation;
+	int			rc;
+
+	rc = crt_self_uri_get(0 /* tag */, &req.uri);
+	if (rc != 0)
+		goto out;
+	rc = crt_self_incarnation_get(&incarnation);
+	if (rc != 0)
+		goto out_uri;
+	req.incarnation = incarnation;
+	req.nctxs = DSS_CTX_NR_TOTAL;
+	/* Do not free, this string is managed by the dRPC listener */
+	req.drpclistenersock = drpc_listener_socket_path;
+	req.instanceidx = dss_instance_idx;
+	req.ntgts = dss_tgt_nr;
+	req.check_mode = check_mode;
+
+	reqb_size = srv__notify_ready_req__get_packed_size(&req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL)
+		D_GOTO(out_uri, rc = -DER_NOMEM);
+	srv__notify_ready_req__pack(&req, reqb);
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, reqb,
+			   reqb_size, 0 /* flags */, abort, abort_arg, &dresp);
+	if (rc != 0)
+		goto out_reqb;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		rc = -DER_IO;
+		goto out_dresp;
+	}
+
+	*sys_exclude = true;
+	*sys_pool_exclude = true;
+	*sys_pool_rebuild = true;
+out_dresp:
+	drpc_response_free(dresp);
+out_reqb:
+	D_FREE(reqb);
+out_uri:
+	D_FREE(req.uri);
+out:
+	return rc;
+#else
+	if (abort(abort_arg))
+		return -DER_OP_CANCELED;
+	/* Read file policy.txt and convert the number in the file to the policy. */
+	FILE *fp;
+	char  buf[32];
+	fp = fopen("policy.txt", "r");
+	if (fp == NULL) {
+		D_ERROR("failed to open policy.txt: %s\n", strerror(errno));
+		return -DER_IO;
+	}
+	if (fgets(buf, sizeof(buf), fp) == NULL) {
+		D_ERROR("failed to read policy.txt: %s\n", strerror(errno));
+		fclose(fp);
+		return -DER_IO;
+	}
+	fclose(fp);
+	/* Convert the string to a number. */
+	char *endptr;
+	*policy = strtoull(buf, &endptr, 10);
+	if (*endptr != '\n' && *endptr != '\0') {
+		D_ERROR("invalid policy in policy.txt: %s\n", buf);
+		return -DER_INVAL;
+	}
+	D_INFO("self_heal=%lx\n", *policy);
+	return 0;
+#endif
+}
+
+int
 ds_mgmt_system_module_init(void)
 {
 	crt_group_t    *group;
