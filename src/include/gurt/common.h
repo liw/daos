@@ -177,6 +177,25 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 			sizeof(s), 0, #ptr, 0);				\
 	} while (0)
 
+#define D_STRCPY_A2A(dest, src)                                                                    \
+	({ D_STRCPY_B2B(dest, sizeof(dest), src, strnlen(src, sizeof(dest))); })
+
+#define D_STRCPY_B2B(dest, dest_size, src, src_size)                                               \
+	({                                                                                         \
+		size_t _n = src_size;                                                              \
+		void  *_p;                                                                         \
+		int    _rc = 0;                                                                    \
+                                                                                                   \
+		if (dest_size < src_size)                                                          \
+			_n = dest_size;                                                            \
+		_p = memccpy(dest, src, '\0', _n);                                                 \
+		if (_p == NULL)                                                                    \
+			_rc = -DER_INVAL;                                                          \
+		else if (_p >= (void *)dest)                                                       \
+			_rc = -DER_TRUNC;                                                          \
+		_rc;                                                                               \
+	})
+
 #define D_ASPRINTF(ptr, ...)                                                                       \
 	do {                                                                                       \
 		int _rc;                                                                           \

@@ -192,10 +192,13 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 				D_GOTO(err_prop, rc);
 		}
 
-		if (attr->da_hints[0] != 0) {
-			strncpy(dattr.da_hints, attr->da_hints, DAOS_CONT_HINT_MAX_LEN - 1);
-			dattr.da_hints[DAOS_CONT_HINT_MAX_LEN - 1] = '\0';
+		rc = D_STRCPY_A2A(dattr.da_hints, attr->da_hints);
+		if (rc == -DER_INVAL) {
+			D_ERROR("attr->da_hints not null terminated\n");
+			D_GOTO(err_prop, rc);
 		}
+		D_CASSERT(sizeof(dattr.da_hints) == sizeof(attr->da_hints));
+		D_ASSERTF(rc == 0, "D_STRCPY_A2A: " DF_RC "\n", DP_RC(rc));
 	} else {
 		dattr.da_oclass_id      = 0;
 		dattr.da_dir_oclass_id  = 0;

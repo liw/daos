@@ -119,12 +119,17 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 
 			/* Save the old name so that we can invalidate it in later */
 			wipe_parent = inode->ie_parent;
-			strncpy(wipe_name, inode->ie_name, NAME_MAX);
-			wipe_name[NAME_MAX] = '\0';
+			D_STRCPY_A2A(wipe_name, inode->ie_name);
+			D_CASSERT(sizeof(wipe_name) == sizeof(inode->ie_name));
+			D_ASSERTF(rc == 0, "D_STRCPY_A2A: " DF_RC "\n", DP_RC(rc));
 
 			inode->ie_parent = ie->ie_parent;
-			strncpy(inode->ie_name, ie->ie_name, NAME_MAX);
-			inode->ie_name[NAME_MAX] = '\0';
+			D_STRCPY_A2A(inode->ie_name, ie->ie_name);
+			if (rc == -DER_INVAL) {
+				D_ERROR("ie->ie_name not null terminated\n");
+				D_GOTO(out_err, rc);
+			}
+			D_ASSERTF(rc == 0, "D_STRCPY_A2A: " DF_RC "\n", DP_RC(rc));
 		}
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(dfuse_info, ie);
