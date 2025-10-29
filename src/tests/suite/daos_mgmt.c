@@ -527,6 +527,35 @@ pool_destroy_cancel_rfcheck(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
+static void
+pool_create_query_fail(void **state)
+{
+	test_arg_t   *arg = *state;
+	uuid_t        uuid;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (arg->myrank != 0)
+		return;
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MGMT_FAIL_CREATE_QUERY | DAOS_FAIL_ONCE);
+
+	print_message("creating pool synchronously ... ");
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+			     256 * 1024 * 1024 /* minimal size */, 0 /* nvme size */,
+			     NULL /* prop */, arg->pool.svc, uuid);
+	assert_rc_equal(rc, 0);
+	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+
+	print_message("destroying pool synchronously ... ");
+	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+}
+
 static const struct CMUnitTest tests[] = {
 	{ "MGMT1: create/destroy pool on all tgts",
 	  pool_create_all, async_disable, test_case_teardown},
@@ -545,7 +574,9 @@ static const struct CMUnitTest tests[] = {
 	{ "MGMT8: pool destroy disconnect all",
 	  pool_destroy_disconnect_all, async_disable, test_case_teardown},
 	{ "MGMT9: pool destroy cancels rfcheck",
-	  pool_destroy_cancel_rfcheck, NULL, test_case_teardown}
+	  pool_destroy_cancel_rfcheck, NULL, test_case_teardown},
+	{ "MGMT10: query in pool create fails",
+	  pool_create_query_fail, async_disable, test_case_teardown}
 };
 
 static int
