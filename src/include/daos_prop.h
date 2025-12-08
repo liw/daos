@@ -508,6 +508,7 @@ enum {
 
 /** clear the UNCLEAN status */
 #define DAOS_PROP_CO_CLEAR	(0x1)
+#define DAOS_PROP_CO_DESTROYING	(0x2)
 
 /** daos container status */
 struct daos_co_status {

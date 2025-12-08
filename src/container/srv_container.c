@@ -1538,14 +1538,37 @@ evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, struct ds_pool_hdl 
 	if (rc != 0)
 		goto out;
 
-	if (arg.fha_buf.rb_nrecs == 0)
-		goto out;
-
-	if (!force) {
+	if (arg.fha_buf.rb_nrecs > 0 && !force) {
 		rc = -DER_BUSY;
 		D_WARN("Not evicting handles, "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+
+	d_iov_t  value;
+	uint64_t co_status_val;
+	d_iov_set(&value, &co_status_val, sizeof(co_status_val));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_co_status, &value);
+	if (rc != 0)
+		goto out;
+	struct daos_co_status co_status;
+	daos_prop_val_2_co_status(co_status_val, &co_status);
+	D_INFO(DF_CONT ": co_status={%x,%x,%u}\n", DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+	       co_status.dcs_status, co_status.dcs_flags, co_status.dcs_pm_ver);
+	co_status.dcs_flags |= DAOS_PROP_CO_DESTROYING;
+	co_status_val = daos_prop_co_status_2_val(&co_status);
+	rc            = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_co_status, &value);
+	if (rc != 0)
+		goto out;
+	rc = rdb_tx_commit(tx);
+	if (rc != 0)
+		goto out;
+	ABT_rwlock_unlock(cont->c_svc->cs_lock);
+	rdb_tx_end(tx);
+	D_INFO(DF_CONT ": marked container destroying\n",
+	       DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+
+	if (arg.fha_buf.rb_nrecs == 0)
+		goto out;
 
 	rc = cont_close_hdls(cont->c_svc, arg.fha_buf.rb_recs, arg.fha_buf.rb_nrecs, ctx);
 
@@ -1612,6 +1635,12 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
 	if (rc != 0)
 		goto out_prop;
+
+	D_INFO("XXX: sleep: begin\n");
+	dss_sleep(10 * 1000);
+	D_INFO("XXX: sleep: end\n");
+	rc = rdb_tx_begin(cont->c_svc->cs_rsvc->s_db, cont->c_svc->cs_rsvc->s_term, tx);
+	ABT_rwlock_wrlock(cont->c_svc->cs_lock);
 
 	cont_track_eph_leader_delete(cont->c_svc, cont->c_uuid);
 
@@ -2579,6 +2608,17 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		}
 	}
 
+	struct daos_prop_entry *entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	D_ASSERT(entry != NULL);
+	struct daos_co_status co_status;
+	daos_prop_val_2_co_status(entry->dpe_val, &co_status);
+	D_INFO(DF_CONT ": co_status={%x,%x,%u}\n", DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+	       co_status.dcs_status, co_status.dcs_flags, co_status.dcs_pm_ver);
+	if (co_status.dcs_flags & DAOS_PROP_CO_DESTROYING) {
+		rc = -DER_CONT_NONEXIST;
+		goto out;
+	}
+
 	get_cont_prop_access_info(prop, &owner, &acl);
 
 	rc = ds_sec_cont_get_capabilities(flags, &pool_hdl->sph_cred, &owner, acl, &sec_capas);
@@ -2899,6 +2939,7 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
 		goto out;
+	ABT_rwlock_wrlock(svc->cs_lock);
 	num_tx++;
 
 	/* TX nhandles cache (for multiple close, tx cannot read back its uncommitted updates. */
@@ -2969,6 +3010,7 @@ out_ht:
 	}
 
 out_tx:
+	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 out:
 	if (rc == 0)
