@@ -141,6 +141,11 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 	} else {
 		fmt.Fprintln(w, "- No rebuild status available.")
 	}
+	if pi.Degraded == daos.DegradedStateYes {
+		fmt.Fprintln(w, "- Data redundancy degraded")
+	} else if pi.Degraded == daos.DegradedStateNo {
+		fmt.Fprintln(w, "- Data redundancy okay")
+	}
 
 	if pi.QueryMask.HasOption(daos.PoolQueryOptionSpace) && pi.TierStats != nil {
 		fmt.Fprintln(w, "Pool space info:")

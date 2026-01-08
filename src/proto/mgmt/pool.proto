@@ -221,6 +221,12 @@ enum PoolServiceState {
 	Unknown = 4 ;   // pool service is Unknown state
 }
 
+enum DegradedState {
+	Unavail = 0;
+	No = 1;
+	Yes = 2;
+}
+
 // PoolQueryResp represents a pool query response.
 message PoolQueryResp {
 	reserved 9;
@@ -249,6 +255,7 @@ message PoolQueryResp {
 	bool   md_on_ssd_active = 23; // MD-on-SSD mode flag
 	string self_heal_policy     = 24; // pool property self_heal value
 	string sys_self_heal_policy = 25; // system property self_heal value
+	DegradedState degraded = 26; // data redundancy is degraded or not
 }
 
 message PoolProperty {

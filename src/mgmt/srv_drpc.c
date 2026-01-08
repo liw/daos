@@ -408,7 +408,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL,
 				daos_getmtime_coarse() + 2 * 60 * 1000, &pool_info, NULL, NULL,
-				&mem_file_bytes);
+				&mem_file_bytes, NULL /* degraded */);
 	if (DAOS_FAIL_CHECK(DAOS_MGMT_FAIL_CREATE_QUERY))
 		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
@@ -1795,6 +1795,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	char                   *enabled_ranks_str  = NULL;
 	char                   *disabled_ranks_str = NULL;
 	char                   *dead_ranks_str     = NULL;
+	bool degraded;
 	size_t                  len;
 	uint8_t                *body;
 
@@ -1820,7 +1821,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_info.pi_bits = req->query_mask;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &disabled_ranks, &dead_ranks,
 				mgmt_ps_call_deadline(), &pool_info, &resp.pool_layout_ver,
-				&resp.upgrade_layout_ver, &resp.mem_file_bytes);
+				&resp.upgrade_layout_ver, &resp.mem_file_bytes, &degraded);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to query the pool", DP_UUID(uuid));
 		D_GOTO(error, rc);
@@ -1872,6 +1873,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (dead_ranks_str != NULL)
 		resp.dead_ranks = dead_ranks_str;
 	resp.md_on_ssd_active = bio_nvme_configured(SMD_DEV_TYPE_META);
+	resp.degraded = degraded ? MGMT__DEGRADED_STATE__Yes : MGMT__DEGRADED_STATE__No;
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL)

@@ -3434,7 +3434,7 @@ const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor =
   (ProtobufCMessageInit) mgmt__pool_rebuild_status__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[24] =
+static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[25] =
 {
   {
     "status",
@@ -3724,10 +3724,23 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[2
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "degraded",
+    26,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_ENUM,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolQueryResp, degraded),
+    &mgmt__degraded_state__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
   4,   /* field[4] = active_targets */
   20,   /* field[20] = dead_ranks */
+  24,   /* field[24] = degraded */
   11,   /* field[11] = disabled_ranks */
   5,   /* field[5] = disabled_targets */
   10,   /* field[10] = enabled_ranks */
@@ -3755,7 +3768,7 @@ static const ProtobufCIntRange mgmt__pool_query_resp__number_ranges[2 + 1] =
 {
   { 1, 0 },
   { 10, 8 },
-  { 0, 24 }
+  { 0, 25 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor =
 {
@@ -3765,7 +3778,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor =
   "Mgmt__PoolQueryResp",
   "mgmt",
   sizeof(Mgmt__PoolQueryResp),
-  24,
+  25,
   mgmt__pool_query_resp__field_descriptors,
   mgmt__pool_query_resp__field_indices_by_name,
   2,  mgmt__pool_query_resp__number_ranges,
@@ -4742,5 +4755,35 @@ const ProtobufCEnumDescriptor mgmt__pool_service_state__descriptor =
   mgmt__pool_service_state__enum_values_by_name,
   1,
   mgmt__pool_service_state__value_ranges,
+  NULL,NULL,NULL,NULL   /* reserved[1234] */
+};
+static const ProtobufCEnumValue mgmt__degraded_state__enum_values_by_number[3] =
+{
+  { "Unavail", "MGMT__DEGRADED_STATE__Unavail", 0 },
+  { "No", "MGMT__DEGRADED_STATE__No", 1 },
+  { "Yes", "MGMT__DEGRADED_STATE__Yes", 2 },
+};
+static const ProtobufCIntRange mgmt__degraded_state__value_ranges[] = {
+{0, 0},{0, 3}
+};
+static const ProtobufCEnumValueIndex mgmt__degraded_state__enum_values_by_name[3] =
+{
+  { "No", 1 },
+  { "Unavail", 0 },
+  { "Yes", 2 },
+};
+const ProtobufCEnumDescriptor mgmt__degraded_state__descriptor =
+{
+  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
+  "mgmt.DegradedState",
+  "DegradedState",
+  "Mgmt__DegradedState",
+  "mgmt",
+  3,
+  mgmt__degraded_state__enum_values_by_number,
+  3,
+  mgmt__degraded_state__enum_values_by_name,
+  1,
+  mgmt__degraded_state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };

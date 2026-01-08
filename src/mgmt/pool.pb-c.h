@@ -127,6 +127,12 @@ typedef enum _Mgmt__PoolServiceState {
   MGMT__POOL_SERVICE_STATE__Unknown = 4
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_SERVICE_STATE)
 } Mgmt__PoolServiceState;
+typedef enum _Mgmt__DegradedState {
+  MGMT__DEGRADED_STATE__Unavail = 0,
+  MGMT__DEGRADED_STATE__No = 1,
+  MGMT__DEGRADED_STATE__Yes = 2
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__DEGRADED_STATE)
+} Mgmt__DegradedState;
 
 /* --- messages --- */
 
@@ -889,10 +895,14 @@ struct  _Mgmt__PoolQueryResp
    * system property self_heal value
    */
   char *sys_self_heal_policy;
+  /*
+   * data redundancy is degraded or not
+   */
+  Mgmt__DegradedState degraded;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, MGMT__DEGRADED_STATE__Unavail }
 
 
 typedef enum {
@@ -2027,6 +2037,7 @@ typedef void (*Mgmt__PoolSelfHealEvalReq_Closure)
 
 extern const ProtobufCEnumDescriptor    mgmt__storage_media_type__descriptor;
 extern const ProtobufCEnumDescriptor    mgmt__pool_service_state__descriptor;
+extern const ProtobufCEnumDescriptor    mgmt__degraded_state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;

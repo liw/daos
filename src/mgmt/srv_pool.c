@@ -401,6 +401,8 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  * \param[in][out]	pool_info	   Query results
  * \param[in][out]	pool_layout_ver	   Pool global version
  * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
+ * \param[out]		mem_file_bytes	   Memory file bytes used by the pool
+ * \param[out]		degraded	   Whether the pool is in degraded mode
  *
  * \return		0		   Success
  *			-DER_INVAL	   Invalid inputs
@@ -410,7 +412,7 @@ int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
 		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks, uint64_t deadline,
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes)
+		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes, bool *degraded)
 {
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
@@ -421,7 +423,7 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 
 	return dsc_pool_svc_query(pool_uuid, svc_ranks, deadline, enabled_ranks, disabled_ranks,
 				  dead_ranks, pool_info, pool_layout_ver, upgrade_layout_ver,
-				  mem_file_bytes);
+				  mem_file_bytes, degraded);
 }
 
 /**

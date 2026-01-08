@@ -85,6 +85,7 @@ type (
 		MemFileBytes     uint64               `json:"mem_file_bytes"`
 		MdOnSsdActive    bool                 `json:"md_on_ssd_active"`
 		SelfHealPolicy   string               `json:"self_heal_policy"`
+		Degraded         DegradedState        `json:"degraded"`
 	}
 
 	// PoolQueryTargetState represents the current state of the pool target.
@@ -378,6 +379,42 @@ func (pss *PoolServiceState) UnmarshalJSON(data []byte) error {
 		return errors.Wrap(err, "failed to unmarshal PoolServiceState")
 	}
 	*pss = PoolServiceState(state)
+
+	return nil
+}
+
+// DegradedState represents the data redundancy degradation state of a pool.
+type DegradedState int32
+
+const (
+	// DegradedStateUnknown indicates that the degraded state is unavailable
+	DegradedStateUnknown = DegradedState(mgmtpb.DegradedState_Unavail)
+	// DegradedStateNo indicates that data redundancy is not degraded
+	DegradedStateNo = DegradedState(mgmtpb.DegradedState_No)
+	// DegradedStateYes indicates that data redundancy is degraded
+	DegradedStateYes = DegradedState(mgmtpb.DegradedState_Yes)
+)
+
+func (ds DegradedState) String() string {
+	dss, ok := mgmtpb.DegradedState_name[int32(ds)]
+	if !ok {
+		return "unknown"
+	}
+	return strings.ToLower(dss)
+}
+
+func (ds DegradedState) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + ds.String() + `"`), nil
+}
+
+func (ds *DegradedState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.ToUpper(strings.Trim(string(data), "\""))
+
+	state, err := unmarshalStrVal(stateStr, mgmtpb.DegradedState_value, mgmtpb.DegradedState_name)
+	if err != nil {
+		return errors.Wrap(err, "failed to unmarshal DegradedState")
+	}
+	*ds = DegradedState(state)
 
 	return nil
 }

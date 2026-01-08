@@ -289,7 +289,7 @@ int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
 		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks, uint64_t deadline,
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes)
+		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes, bool *degraded)
 {
 	/* If function is to return with an error, pool_info and ranks will not be filled. */
 	if (ds_mgmt_pool_query_return != 0)
@@ -324,6 +324,10 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 	ds_mgmt_pool_query_info_in = *pool_info;
 	*pool_info                 = ds_mgmt_pool_query_info_out;
 	*mem_file_bytes            = ds_mgmt_pool_query_mem_bytes;
+
+	/* Mock degraded flag - set to false by default */
+	if (degraded != NULL)
+		*degraded = false;
 
 	return ds_mgmt_pool_query_return;	/* 0 */
 }

@@ -326,7 +326,7 @@ int dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadl
 		       d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
 		       d_rank_list_t **dead_ranks, daos_pool_info_t *pool_info,
 		       uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver,
-		       uint64_t *mem_file_bytes);
+		       uint64_t *mem_file_bytes, bool *degraded);
 int dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 			      d_rank_t rank, uint32_t tgt_idx, daos_target_info_t *ti,
 			      uint64_t *mem_file_bytes);

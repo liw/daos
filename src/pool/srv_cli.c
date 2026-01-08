@@ -347,6 +347,7 @@ struct pool_query_arg {
 	struct pool_buf  *pqa_map_buf;
 	uint64_t	 *pqa_mem_file_bytes;
 	uint32_t          pqa_map_size;
+	bool             *pqa_degraded;
 };
 
 static int
@@ -423,7 +424,8 @@ static int
 process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
 		     d_rank_list_t **dead_ranks, daos_pool_info_t *info, uuid_t pool_uuid,
 		     uint32_t map_version, uint32_t leader_rank, struct daos_pool_space *ps,
-		     struct daos_rebuild_status *rs, struct pool_buf *map_buf, uint64_t pi_bits)
+		     struct daos_rebuild_status *rs, struct pool_buf *map_buf, uint64_t pi_bits,
+		     bool *degraded)
 {
 	struct pool_map *map                = NULL;
 	unsigned int     num_disabled       = 0;
@@ -496,6 +498,20 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 
 	pool_query_reply_to_info(pool_uuid, map_buf, map_version, leader_rank, ps, rs, info);
 	info->pi_ndisabled = num_disabled;
+
+	if (degraded != NULL) {
+		unsigned int num_down = 0;
+
+		rc = pool_map_find_down_tgts(map, NULL, &num_down);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to count DOWN targets", DP_UUID(pool_uuid));
+			goto error;
+		}
+		*degraded = (num_down > 0);
+		D_DEBUG(DB_MD, DF_UUID ": found %u DOWN targets\n",
+			DP_UUID(pool_uuid), num_down);
+	}
+
 	if (enabled_rank_list != NULL)
 		*enabled_ranks = enabled_rank_list;
 	if (disabled_rank_list != NULL)
@@ -539,7 +555,7 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	rc = process_query_result(
 	    arg->pqa_enabled_ranks, arg->pqa_disabled_ranks, arg->pqa_dead_ranks, arg->pqa_info,
 	    pool_uuid, out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank, &out->pqo_space,
-	    &out->pqo_rebuild_st, arg->pqa_map_buf, arg->pqa_info->pi_bits);
+	    &out->pqo_rebuild_st, arg->pqa_map_buf, arg->pqa_info->pi_bits, arg->pqa_degraded);
 	if (arg->pqa_layout_ver)
 		*arg->pqa_layout_ver = out->pqo_pool_layout_ver;
 	if (arg->pqa_upgrade_layout_ver)
@@ -582,6 +598,8 @@ static struct dsc_pool_svc_call_cbs pool_query_cbs = {
  * \param[in][out]	pool_info		Results of the pool query
  * \param[in][out]	pool_layout_ver		Results of the current pool global version
  * \param[in][out]	upgrade_layout_ver	Results of the target latest pool global version
+ * \param[out]		mem_file_bytes		Memory file bytes used by the pool
+ * \param[out]		degraded		Whether the pool is in degraded mode
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
@@ -595,7 +613,7 @@ dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 		   d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
 		   d_rank_list_t **dead_ranks, daos_pool_info_t *pool_info,
 		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver,
-		   uint64_t *mem_file_bytes)
+		   uint64_t *mem_file_bytes, bool *degraded)
 {
 	struct pool_query_arg arg = {
 	    .pqa_enabled_ranks      = enabled_ranks,
@@ -605,7 +623,8 @@ dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 	    .pqa_layout_ver         = pool_layout_ver,
 	    .pqa_upgrade_layout_ver = upgrade_layout_ver,
 	    .pqa_mem_file_bytes     = mem_file_bytes,
-	    .pqa_map_size           = 127 /* 4 KB */
+	    .pqa_map_size           = 127 /* 4 KB */,
+	    .pqa_degraded           = degraded
 	};
 
 	return dsc_pool_svc_call(pool_uuid, ps_ranks, &pool_query_cbs, &arg, deadline);
