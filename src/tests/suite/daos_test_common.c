@@ -1121,6 +1121,13 @@ daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
 }
 
+int
+daos_pool_get_prop(const uuid_t pool_uuid, const char *name,
+		   char **value_out)
+{
+	return dmg_pool_get_prop(dmg_config_file, NULL, pool_uuid, name, value_out);
+}
+
 void
 daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 		  const char *grp, d_rank_list_t *svc, d_rank_t rank)
