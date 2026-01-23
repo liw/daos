@@ -67,6 +67,7 @@ struct sched_info {
 	/* Number of kicked requests for each type in current cycle */
 	uint32_t		 si_kicked_req_cnt[SCHED_REQ_MAX];
 	unsigned int		 si_stop:1;
+	unsigned int             si_no_yield : 7; /* Last executed unit asserts no yield */
 };
 
 struct mem_stats {
@@ -327,6 +328,24 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 
 	rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
+}
+
+static void
+sched_assert_no_yield_begin(void)
+{
+	struct dss_xstream *dx = dss_current_xstream();
+
+	dx->dx_sched_info.si_no_yield++;
+	D_ASSERT(dx->dx_sched_info.si_no_yield != 0); /* no overflow */
+}
+
+static void
+sched_assert_no_yield_end(void)
+{
+	struct dss_xstream *dx = dss_current_xstream();
+
+	D_ASSERT(dx->dx_sched_info.si_no_yield != 0); /* no underflow */
+	dx->dx_sched_info.si_no_yield--;
 }
 
 /* server_iv.c */

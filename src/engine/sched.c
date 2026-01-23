@@ -2381,6 +2381,8 @@ execute:
 		ABT_xstream_run_unit(unit, pool);
 
 		sched_watchdog_post(dx);
+		D_ASSERTF(dx->dx_sched_info.si_no_yield == 0, "No yield assertion failed: %u\n",
+			  dx->dx_sched_info.si_no_yield); /* TODO: print unit stack */
 start_cycle:
 		if (cycle->sc_new_cycle) {
 			sched_start_cycle(data, pools);
