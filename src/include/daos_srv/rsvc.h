@@ -53,6 +53,9 @@ struct ds_rsvc_class {
 	 */
 	void (*sc_free)(struct ds_rsvc *svc);
 
+	/** Prepare for being inserted into the hash table. */
+	int (*sc_insert)(struct ds_rsvc *svc);
+
 	/**
 	 * Bootstrap (i.e., initialize) the DB with the argument passed to
 	 * ds_rsvc_start. If supplied, this is called on a self-only service.
