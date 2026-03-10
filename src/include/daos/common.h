@@ -638,7 +638,9 @@ daos_der2errno(int err)
 	case -DER_SUCCESS:	return 0;
 	case -DER_NO_PERM:
 	case -DER_EP_RO:
-	case -DER_EP_OLD:	return EPERM;
+	case -DER_EP_OLD:
+	case -DER_CONT_DESTROYING:
+		return EPERM;
 	case -DER_ENOENT:
 	case -DER_NONEXIST:	return ENOENT;
 	case -DER_INVAL:
