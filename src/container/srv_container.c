@@ -1605,6 +1605,11 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		goto out;
 	}
 
+	/* Reset recov_cont prop to notify on flight pool_recov_cont to retry. */
+	rc = ds_pool_prop_recov_cont_reset(tx, cont->c_svc->cs_rsvc);
+	if (rc != 0)
+		goto out;
+
 	/* Fetch the container props to check access for delete */
 	rc = cont_prop_read(tx, cont,
 			    DAOS_CO_QUERY_PROP_ACL |
@@ -1687,11 +1692,6 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 		}
 		goto out_lock;
 	}
-
-	/* Reset recov_cont prop to notify on flight pool_recov_cont to retry. */
-	rc = ds_pool_prop_recov_cont_reset(&tx, cont->c_svc->cs_rsvc);
-	if (rc != 0)
-		goto out_cont;
 
 	cont_track_eph_leader_delete(cont->c_svc, cont->c_uuid);
 
@@ -2386,8 +2386,9 @@ cont_svc_eph_track_leader_stop(struct cont_svc *svc)
 	svc->cs_cont_ephs_leader_req = NULL;
 }
 
-int
-cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
+static int
+cont_lookup_internal(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
+		     bool include_destroying, struct cont **cont)
 {
 	struct cont    *p;
 	d_iov_t		key;
@@ -2413,15 +2414,29 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, st
 	rc = rdb_path_clone(&svc->cs_conts, &p->c_prop);
 	if (rc != 0)
 		D_GOTO(err_p, rc);
-
 	rc = rdb_path_push(&p->c_prop, &key);
 	if (rc != 0)
-		D_GOTO(err_attrs, rc);
+		goto err_prop;
+
+	if (!include_destroying) {
+		container_flags_t flags;
+
+		d_iov_set(&tmp, &flags, sizeof(flags));
+		rc = rdb_tx_lookup(tx, &p->c_prop, &ds_cont_prop_ghce, &tmp);
+		if (rc != 0)
+			goto err_prop;
+		if (flags & CONTAINER_F_DESTROYING) {
+			D_DEBUG(DB_MD, DF_CONT ": ignore destroying\n",
+				DP_CONT(svc->cs_pool_uuid, p->c_uuid));
+			rc = -DER_NONEXIST;
+			goto err_prop;
+		}
+	}
 
 	/* c_snaps */
 	rc = rdb_path_clone(&p->c_prop, &p->c_snaps);
 	if (rc != 0)
-		D_GOTO(err_attrs, rc);
+		goto err_prop;
 	rc = rdb_path_push(&p->c_snaps, &ds_cont_prop_snapshots);
 	if (rc != 0)
 		D_GOTO(err_snaps, rc);
@@ -2461,12 +2476,18 @@ err_user:
 	rdb_path_fini(&p->c_user);
 err_snaps:
 	rdb_path_fini(&p->c_snaps);
-err_attrs:
+err_prop:
 	rdb_path_fini(&p->c_prop);
 err_p:
 	D_FREE(p);
 err:
 	return rc;
+}
+
+int
+cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
+{
+	return cont_lookup_internal(tx, svc, uuid, true /* include_destroying */, cont);
 }
 
 static int
@@ -4553,6 +4574,7 @@ struct list_cont_iter_args {
 	struct daos_pool_cont_info	*conts;
 	struct cont_svc			*svc;
 	struct rdb_tx			*tx;
+	bool                             include_destroying;
 };
 
 /* callback function for list containers iteration. */
@@ -4598,7 +4620,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	 * in cs_conts, since we're iterating that KVS already.
 	 * Isn't val the container properties KVS? Can it be used directly?
 	 */
-	rc = cont_lookup(ap->tx, ap->svc, cont_uuid, &cont);
+	rc = cont_lookup_internal(ap->tx, ap->svc, cont_uuid, ap->include_destroying, &cont);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
@@ -4626,14 +4648,15 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 /**
  * List all containers in a pool.
  *
- * \param[in]	pool_uuid	Pool UUID.
- * \param[out]	conts		Array of container info structures
- *				to be allocated. Caller must free.
- * \param[out]	ncont		Number of containers in the pool
- *				(number of items populated in conts[]).
+ * \param[in]	pool_uuid		Pool UUID.
+ * \param[in]	include_destroying	Whether to include containers that are being destroyed.
+ * \param[out]	conts			Array of container info structures
+ *					to be allocated. Caller must free.
+ * \param[out]	ncont			Number of containers in the pool
+ *					(number of items populated in conts[]).
  */
 int
-ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
+ds_cont_list(uuid_t pool_uuid, bool include_destroying, struct daos_pool_cont_info **conts,
 	     uint64_t *ncont)
 {
 	int				 rc;
@@ -4647,6 +4670,7 @@ ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
 	args.ncont = 0;			/* number of containers in the pool */
 	args.conts_len = 0;		/* allocated length of conts[] */
 	args.conts = NULL;
+	args.include_destroying = include_destroying;
 
 	uuid_copy(args.pool_uuid, pool_uuid);
 
