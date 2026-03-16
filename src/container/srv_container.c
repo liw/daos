@@ -2423,8 +2423,15 @@ cont_lookup_internal(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t
 
 		d_iov_set(&tmp, &flags, sizeof(flags));
 		rc = rdb_tx_lookup(tx, &p->c_prop, &ds_cont_prop_ghce, &tmp);
-		if (rc != 0)
+		if (rc != 0) {
+			if (rc == -DER_NONEXIST) {
+				D_ERROR(DF_CONT ": container property ghce not found\n",
+					DP_CONT(svc->cs_pool_uuid, p->c_uuid));
+				/* It is the property that doesn't exist, not the container. */
+				rc = -DER_IO;
+			}
 			goto err_prop;
+		}
 		if (flags & CONTAINER_F_DESTROYING) {
 			D_DEBUG(DB_MD, DF_CONT ": ignore destroying\n",
 				DP_CONT(svc->cs_pool_uuid, p->c_uuid));
@@ -4612,16 +4619,15 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		ap->conts_len = realloc_elems;
 	}
 
-	cinfo = &ap->conts[ap->ncont];
-	ap->ncont++;
-	uuid_copy(cinfo->pci_uuid, cont_uuid);
-
 	/* Get the label property. FIXME: cont_lookup no need to search
 	 * in cs_conts, since we're iterating that KVS already.
 	 * Isn't val the container properties KVS? Can it be used directly?
 	 */
 	rc = cont_lookup_internal(ap->tx, ap->svc, cont_uuid, ap->include_destroying, &cont);
-	if (rc != 0) {
+	if (rc == -DER_NONEXIST && !ap->include_destroying) {
+		/* Continue iterating. */
+		return 0;
+	} else if (rc != 0) {
 		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
 		return rc;
@@ -4633,6 +4639,9 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
 		return rc;
 	}
+	cinfo = &ap->conts[ap->ncont];
+	ap->ncont++;
+	uuid_copy(cinfo->pci_uuid, cont_uuid);
 	if (prop->dpp_entries[0].dpe_str) {
 		strncpy(cinfo->pci_label, prop->dpp_entries[0].dpe_str,
 			DAOS_PROP_LABEL_MAX_LEN);
