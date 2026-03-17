@@ -1670,6 +1670,11 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 	struct daos_prop_entry *lbl_ent;
 	bool                    need_destroy_oid_oit_kvs = false;
 
+	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_POST)) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
 	rc = cont_destroy_bcast(rpc->cr_ctx, svc, uuid);
 	if (rc != 0)
 		goto out;
