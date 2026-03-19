@@ -1657,6 +1657,22 @@ out:
 	return rc;
 }
 
+/** Decrement fail_value and wait until it reaches zero or fail_loc is reset. */
+void
+dss_fail_value_barrier(uint64_t fail_loc)
+{
+	uint64_t v;
+
+	v = daos_fail_value_get();
+	if(v == 0)
+		return;
+	daos_fail_value_set(v - 1);
+	D_INFO("fail_value="DF_U64"->"DF_U64"\n", v, v-1);
+
+	while (daos_fail_value_get() > 0 && DAOS_FAIL_CHECK(fail_loc))
+		ABT_thread_yield();
+}
+
 static int
 cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uuid, crt_rpc_t *rpc,
 		  int cont_proto_ver)
@@ -1674,6 +1690,9 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 		rc = -DER_NOMEM;
 		goto out;
 	}
+
+	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_BARRIER_POST))
+		dss_fail_value_barrier(DAOS_CONT_DESTROY_BARRIER_POST);
 
 	rc = cont_destroy_bcast(rpc->cr_ctx, svc, uuid);
 	if (rc != 0)
