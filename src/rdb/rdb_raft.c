@@ -28,6 +28,7 @@
 #define D_LOGFAC DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
+#include <daos_srv/dabt.h>
 
 #include <abt.h>
 #include <raft.h>
@@ -812,7 +813,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 	rc = arg.drb_rc;
 
 out_eventual:
-	ABT_eventual_free(&arg.drb_eventual);
+	DABT_EVENTUAL_FREE(&arg.drb_eventual);
 out_data_bulk:
 	crt_bulk_free(data_bulk);
 out_kds_bulk:
@@ -1564,7 +1565,7 @@ rdb_raft_cb_log_poll(raft_server_t *raft, void *arg, raft_entry_t *entries,
 	}
 
 	/* Notify rdb_compactd(), who performs the real compaction. */
-	ABT_cond_broadcast(db->d_compact_cv);
+	DABT_COND_BROADCAST(db->d_compact_cv);
 
 	return 0;
 }
@@ -1859,7 +1860,7 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	}
 
 	/* If requesting ULT is waiting synchronously, notify. */
-	ABT_cond_broadcast(db->d_compacted_cv);
+	DABT_COND_BROADCAST(db->d_compacted_cv);
 	ABT_mutex_unlock(db->d_raft_mutex);
 
 	D_DEBUG(DB_TRACE, DF_DB": compacted to "DF_U64"\n", DP_DB(db), index);
@@ -1960,7 +1961,7 @@ rdb_raft_queue_event(struct rdb *db, enum rdb_raft_event_type type,
 	db->d_events[db->d_nevents].dre_term = term;
 	db->d_events[db->d_nevents].dre_type = type;
 	db->d_nevents++;
-	ABT_cond_broadcast(db->d_events_cv);
+	DABT_COND_BROADCAST(db->d_events_cv);
 }
 
 static void
@@ -2187,7 +2188,7 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 
 	if (state->drs_term != term || state->drs_leader != leader ||
 	    state->drs_committed != committed)
-		ABT_cond_broadcast(db->d_applied_cv);
+		DABT_COND_BROADCAST(db->d_applied_cv);
 
 	return rc;
 }
@@ -3217,7 +3218,7 @@ rdb_raft_start(struct rdb *db)
 
 err_callbackd:
 	db->d_stop = true;
-	ABT_cond_broadcast(db->d_events_cv);
+	DABT_COND_BROADCAST(db->d_events_cv);
 	rc = ABT_thread_free(&db->d_callbackd);
 	D_ASSERTF(rc == 0, "free rdb_callbackd: "DF_RC"\n", DP_RC(rc));
 err_timerd:
@@ -3226,7 +3227,7 @@ err_timerd:
 	D_ASSERTF(rc == 0, "free rdb_timerd: "DF_RC"\n", DP_RC(rc));
 err_recvd:
 	db->d_stop = true;
-	ABT_cond_broadcast(db->d_replies_cv);
+	DABT_COND_BROADCAST(db->d_replies_cv);
 	rc = ABT_thread_free(&db->d_recvd);
 	D_ASSERTF(rc == 0, "free rdb_recvd: "DF_RC"\n", DP_RC(rc));
 	db->d_stop = false;
@@ -3251,13 +3252,13 @@ rdb_raft_stop(struct rdb *db)
 
 	/* Wake up all daemons and TXs. */
 	ABT_mutex_lock(db->d_raft_mutex);
-	ABT_cond_broadcast(db->d_applied_cv);
-	ABT_cond_broadcast(db->d_events_cv);
-	ABT_cond_broadcast(db->d_compact_cv);
+	DABT_COND_BROADCAST(db->d_applied_cv);
+	DABT_COND_BROADCAST(db->d_events_cv);
+	DABT_COND_BROADCAST(db->d_compact_cv);
 	ABT_mutex_unlock(db->d_raft_mutex);
 
 	ABT_mutex_lock(db->d_mutex);
-	ABT_cond_broadcast(db->d_replies_cv);
+	DABT_COND_BROADCAST(db->d_replies_cv);
 
 	/* Abort all in-flight RPCs. */
 	rdb_abort_raft_rpcs(db);
@@ -3270,7 +3271,7 @@ rdb_raft_stop(struct rdb *db)
 			break;
 		D_DEBUG(DB_MD, DF_DB": waiting for %d references\n", DP_DB(db),
 			db->d_ref - RDB_BASE_REFS);
-		ABT_cond_wait(db->d_ref_cv, db->d_mutex);
+		DABT_COND_WAIT(db->d_ref_cv, db->d_mutex);
 	}
 	ABT_mutex_unlock(db->d_mutex);
 
@@ -3395,7 +3396,7 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)
 		}
 		if (index <= db->d_applied)
 			break;
-		ABT_cond_wait(db->d_applied_cv, db->d_raft_mutex);
+		DABT_COND_WAIT(db->d_applied_cv, db->d_raft_mutex);
 	}
 	return rc;
 }

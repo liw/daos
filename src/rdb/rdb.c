@@ -14,6 +14,7 @@
 
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/dabt.h>
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
 #include "rdb_layout.h"
@@ -167,7 +168,7 @@ rdb_put(struct rdb *db)
 	D_ASSERTF(db->d_ref > 0, "%d\n", db->d_ref);
 	db->d_ref--;
 	if (db->d_ref == RDB_BASE_REFS)
-		ABT_cond_broadcast(db->d_ref_cv);
+		DABT_COND_BROADCAST(db->d_ref_cv);
 	ABT_mutex_unlock(db->d_mutex);
 }
 
@@ -221,7 +222,7 @@ rdb_hash_init(void)
 					 NULL /* priv */, &rdb_hash_ops,
 					 &rdb_hash);
 	if (rc != 0)
-		ABT_mutex_free(&rdb_hash_lock);
+		DABT_MUTEX_FREE(&rdb_hash_lock);
 	return rc;
 }
 
@@ -229,7 +230,7 @@ void
 rdb_hash_fini(void)
 {
 	d_hash_table_destroy_inplace(&rdb_hash, true /* force */);
-	ABT_mutex_free(&rdb_hash_lock);
+	DABT_MUTEX_FREE(&rdb_hash_lock);
 }
 
 struct rdb *
@@ -381,9 +382,9 @@ err_gen_lock:
 err_ref_cv:
 	ABT_cond_free(&db->d_ref_cv);
 err_raft_mutex:
-	ABT_mutex_free(&db->d_raft_mutex);
+	DABT_MUTEX_FREE(&db->d_raft_mutex);
 err_mutex:
-	ABT_mutex_free(&db->d_mutex);
+	DABT_MUTEX_FREE(&db->d_mutex);
 err_db:
 	D_FREE(db);
 err:
@@ -525,8 +526,8 @@ rdb_close(struct rdb_storage *storage)
 	rdb_kvs_cache_destroy(db->d_kvss);
 	ABT_rwlock_free(&db->d_gen_lock);
 	ABT_cond_free(&db->d_ref_cv);
-	ABT_mutex_free(&db->d_raft_mutex);
-	ABT_mutex_free(&db->d_mutex);
+	DABT_MUTEX_FREE(&db->d_raft_mutex);
+	DABT_MUTEX_FREE(&db->d_mutex);
 	D_DEBUG(DB_MD, DF_DB": closed db %p\n", DP_DB(db), db);
 	D_FREE(db);
 }
@@ -1055,7 +1056,7 @@ rdb_chkpt_wait(void *arg, uint64_t wait_id, uint64_t *commit_id)
 	ABT_mutex_lock(db->d_chkpt_mutex);
 	dcr->dcr_waiting = 1;
 	dcr->dcr_wait_id = wait_id;
-	ABT_cond_wait(db->d_commit_cv, db->d_chkpt_mutex);
+	DABT_COND_WAIT(db->d_commit_cv, db->d_chkpt_mutex);
 	ABT_mutex_unlock(db->d_chkpt_mutex);
 out:
 	D_DEBUG(DB_MD, DF_DB ": commit " DF_X64 " is >= " DF_X64 "\n", DP_DB(db),
@@ -1086,7 +1087,7 @@ rdb_chkpt_update(void *arg, uint64_t commit_id, uint32_t used_blocks, uint32_t t
 			D_DEBUG(DB_MD,
 				DF_DB ": used %u/%u exceeds threshold %u, triggering checkpoint\n",
 				DP_DB(db), used_blocks, total_blocks, dcr->dcr_thresh);
-			ABT_cond_broadcast(db->d_chkpt_cv);
+			DABT_COND_BROADCAST(db->d_chkpt_cv);
 		}
 		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 ", chkpt is idle\n", DP_DB(db),
 			commit_id);
@@ -1107,7 +1108,7 @@ rdb_chkpt_update(void *arg, uint64_t commit_id, uint32_t used_blocks, uint32_t t
 			DF_DB ": update commit = " DF_X64 ", waking checkpoint waiting for " DF_X64
 			      "\n",
 			DP_DB(db), commit_id, dcr->dcr_wait_id);
-		ABT_cond_broadcast(db->d_commit_cv);
+		DABT_COND_BROADCAST(db->d_commit_cv);
 	} else {
 		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 "\n", DP_DB(db), commit_id);
 	}
@@ -1205,7 +1206,7 @@ rdb_chkptd_stop(struct rdb *db)
 	case CHKPT_ULT:
 		D_DEBUG(DB_MD, DF_DB ": Stopping chkptd ULT\n", DP_DB(db));
 		dcr->dcr_stop = 1;
-		ABT_cond_broadcast(db->d_chkpt_cv);
+		DABT_COND_BROADCAST(db->d_chkpt_cv);
 		rc = ABT_thread_free(&db->d_chkptd);
 		D_ASSERTF(rc == 0, "free rdb_chkptd: rc=%d\n", rc);
 		D_DEBUG(DB_MD, DF_DB ": Stopped chkptd ULT\n", DP_DB(db));
@@ -1217,7 +1218,7 @@ rdb_chkptd_stop(struct rdb *db)
 		ABT_cond_free(&db->d_chkpt_cv);
 		/** Fall through */
 	case CHKPT_MUTEX:
-		ABT_mutex_free(&db->d_chkpt_mutex);
+		DABT_MUTEX_FREE(&db->d_chkpt_mutex);
 		/** Fall through */
 	}
 

@@ -15,6 +15,7 @@
 #include <daos/common.h>
 #include <daos/pool.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/dabt.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_chk.h>
 #include <daos_srv/pool.h>
@@ -1948,7 +1949,7 @@ chk_engine_wait_ults(struct chk_pool_rec *cpr)
 	while ((ult = d_list_pop_entry(&cpr->cpr_ult_list, struct chk_engine_ult, ceu_link)) !=
 	       NULL) {
 		if (ult->ceu_ult != ABT_THREAD_NULL)
-			ABT_thread_free(&ult->ceu_ult);
+			DABT_THREAD_FREE(&ult->ceu_ult);
 
 		if (rc == 0)
 			rc = ult->ceu_result;
@@ -2526,7 +2527,7 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
-		ABT_thread_free(&ins->ci_sched);
+		DABT_THREAD_FREE(&ins->ci_sched);
 
 	chk_iv_ns_destroy(ins);
 
@@ -2953,7 +2954,7 @@ chk_engine_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act)
 		 * ignored.
 		 */
 		cpr->cpr_action = act;
-		ABT_cond_broadcast(cpr->cpr_cond);
+		DABT_COND_BROADCAST(cpr->cpr_cond);
 		ABT_mutex_unlock(cpr->cpr_mutex);
 	}
 
@@ -3502,7 +3503,7 @@ again:
 		goto out;
 	}
 
-	ABT_cond_wait(cpr->cpr_cond, cpr->cpr_mutex);
+	DABT_COND_WAIT(cpr->cpr_cond, cpr->cpr_mutex);
 
 	goto again;
 

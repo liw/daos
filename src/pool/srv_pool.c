@@ -38,6 +38,7 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+#include <daos_srv/dabt.h>
 #include "srv_pool_map.h"
 
 #define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
@@ -145,7 +146,7 @@ sched_init(struct pool_svc_sched *sched)
 
 	rc = ABT_cond_create(&sched->psc_cv);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&sched->psc_mutex);
+		DABT_MUTEX_FREE(&sched->psc_mutex);
 		return dss_abterr2der(rc);
 	}
 
@@ -160,7 +161,7 @@ static void
 sched_fini(struct pool_svc_sched *sched)
 {
 	ABT_cond_free(&sched->psc_cv);
-	ABT_mutex_free(&sched->psc_mutex);
+	DABT_MUTEX_FREE(&sched->psc_mutex);
 }
 
 static void
@@ -195,7 +196,7 @@ sched_wait(struct pool_svc_sched *sched)
 	 */
 	ABT_mutex_lock(sched->psc_mutex);
 	while (sched->psc_in_progress)
-		ABT_cond_wait(sched->psc_cv, sched->psc_mutex);
+		DABT_COND_WAIT(sched->psc_cv, sched->psc_mutex);
 	ABT_mutex_unlock(sched->psc_mutex);
 }
 
@@ -1409,7 +1410,7 @@ err_sched:
 err_events_cv:
 	ABT_cond_free(&svc->ps_events.pse_cv);
 err_events_mutex:
-	ABT_mutex_free(&svc->ps_events.pse_mutex);
+	DABT_MUTEX_FREE(&svc->ps_events.pse_mutex);
 err_svcops:
 	rdb_path_fini(&svc->ps_ops);
 err_user:
@@ -1419,7 +1420,7 @@ err_handles:
 err_root:
 	rdb_path_fini(&svc->ps_root);
 err_psc_lock:
-	ABT_mutex_free(&svc->ps_space_cache.psc_lock);
+	DABT_MUTEX_FREE(&svc->ps_space_cache.psc_lock);
 err_lock:
 	ABT_rwlock_free(&svc->ps_lock);
 err_pool:
@@ -1551,7 +1552,7 @@ queue_event(struct pool_svc *svc, d_rank_t rank, uint64_t incarnation, enum crt_
 		events->pse_paused = false;
 	}
 
-	ABT_cond_broadcast(events->pse_cv);
+	DABT_COND_BROADCAST(events->pse_cv);
 
 out:
 	if (rc != 0 && allocated)
@@ -1569,7 +1570,7 @@ resume_event_handling(struct pool_svc *svc)
 	if (events->pse_paused) {
 		D_DEBUG(DB_MD, DF_UUID ": resuming event handling\n", DP_UUID(svc->ps_uuid));
 		events->pse_paused = false;
-		ABT_cond_broadcast(events->pse_cv);
+		DABT_COND_BROADCAST(events->pse_cv);
 	}
 	ABT_mutex_unlock(events->pse_mutex);
 }
@@ -1678,7 +1679,7 @@ event_timer(void *varg)
 
 	if (time_left > 0)
 		sched_req_sleep(events->pse_timer, time_left * 1000);
-	ABT_cond_broadcast(events->pse_cv);
+	DABT_COND_BROADCAST(events->pse_cv);
 }
 
 static int
@@ -1884,10 +1885,10 @@ fini_events(struct pool_svc *svc)
 
 	ABT_mutex_lock(events->pse_mutex);
 	events->pse_stop = true;
-	ABT_cond_broadcast(events->pse_cv);
+	DABT_COND_BROADCAST(events->pse_cv);
 	ABT_mutex_unlock(events->pse_mutex);
 
-	ABT_thread_free(&events->pse_handler);
+	DABT_THREAD_FREE(&events->pse_handler);
 	events->pse_handler = ABT_THREAD_NULL;
 	events->pse_stop = false;
 }
@@ -1901,7 +1902,7 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 	sched_fini(&svc->ps_reconf_sched);
 	sched_fini(&svc->ps_rfcheck_sched);
 	ABT_cond_free(&svc->ps_events.pse_cv);
-	ABT_mutex_free(&svc->ps_events.pse_mutex);
+	DABT_MUTEX_FREE(&svc->ps_events.pse_mutex);
 	rdb_path_fini(&svc->ps_ops);
 	rdb_path_fini(&svc->ps_user);
 	rdb_path_fini(&svc->ps_handles);
@@ -3040,7 +3041,7 @@ ds_pool_start_all(void)
 			DP_RC(rc));
 		return rc;
 	}
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 	return 0;
 }
 
@@ -3101,7 +3102,7 @@ pool_stop_all(void *varg)
 	/* Wait for the stopper ULTs to return. */
 	d_list_for_each_entry_safe(ult, ult_tmp, &arg.saa_list, su_entry) {
 		d_list_del_init(&ult->su_entry);
-		ABT_thread_free(&ult->su_thread);
+		DABT_THREAD_FREE(&ult->su_thread);
 		D_FREE(ult);
 	}
 
@@ -3127,7 +3128,7 @@ ds_pool_stop_all(void)
 			DP_RC(rc));
 		return rc;
 	}
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 
 	return 0;
 }
@@ -4179,8 +4180,8 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->bci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
-			 sizeof(cb_info->bci_rc));
+	DABT_EVENTUAL_SET(*eventual, (void *)&cb_info->bci_rc,
+			  sizeof(cb_info->bci_rc));
 	return 0;
 }
 
@@ -4963,7 +4964,7 @@ transfer_cont_buf(void *cont_buf, size_t cont_buf_size, struct pool_svc *svc,
 		D_GOTO(out_eventual, rc = *status);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out_bulk:
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
@@ -7114,7 +7115,7 @@ out:
 	D_FREE(reconf->psc_arg);
 	reconf->psc_rc = rc;
 	sched_end(reconf);
-	ABT_cond_broadcast(reconf->psc_cv);
+	DABT_COND_BROADCAST(reconf->psc_cv);
 	D_DEBUG(DB_MD, DF_UUID": end: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 }
 
@@ -7248,7 +7249,7 @@ pool_svc_rfcheck_ult(void *arg)
 
 	sched_end(&svc->ps_rfcheck_sched);
 	D_INFO("RF check finished for "DF_UUID"\n", DP_UUID(svc->ps_uuid));
-	ABT_cond_broadcast(svc->ps_rfcheck_sched.psc_cv);
+	DABT_COND_BROADCAST(svc->ps_rfcheck_sched.psc_cv);
 }
 
 /*
@@ -8666,7 +8667,7 @@ transfer_ranks_buf(d_rank_t *ranks_buf, size_t nranks,
 		D_GOTO(out_eventual, rc = *status);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out_bulk:
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
@@ -9236,7 +9237,7 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
 		D_GOTO(out_eventual, rc = *status);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 

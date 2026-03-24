@@ -8,6 +8,7 @@
 #define D_LOGFAC	DD_FAC(chk)
 
 #include <abt.h>
+#include <daos_srv/dabt.h>
 #include <cart/api.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
@@ -103,7 +104,7 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 out:
 	if (rc != 0 && cpr != NULL) {
 		if (cpr->cpr_mutex != ABT_MUTEX_NULL)
-			ABT_mutex_free(&cpr->cpr_mutex);
+			DABT_MUTEX_FREE(&cpr->cpr_mutex);
 		if (cpr->cpr_cond != ABT_COND_NULL)
 			ABT_cond_free(&cpr->cpr_cond);
 		D_FREE(cps);
@@ -261,7 +262,7 @@ out:
 	if (rc != 0) {
 		if (cpr != NULL) {
 			if (cpr->cpr_mutex != ABT_MUTEX_NULL)
-				ABT_mutex_free(&cpr->cpr_mutex);
+				DABT_MUTEX_FREE(&cpr->cpr_mutex);
 			if (cpr->cpr_cond != ABT_COND_NULL)
 				ABT_cond_free(&cpr->cpr_cond);
 			D_FREE(cpr);
@@ -288,7 +289,7 @@ chk_pending_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		ABT_mutex_lock(cpr->cpr_mutex);
 		if (cpr->cpr_busy) {
 			cpr->cpr_exiting = 1;
-			ABT_cond_broadcast(cpr->cpr_cond);
+			DABT_COND_BROADCAST(cpr->cpr_cond);
 			ABT_mutex_unlock(cpr->cpr_mutex);
 		} else {
 			ABT_mutex_unlock(cpr->cpr_mutex);
@@ -444,7 +445,7 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 	ABT_mutex_lock(cpr->cpr_mutex);
 	if (cpr->cpr_thread != ABT_THREAD_NULL) {
 		cpr->cpr_stop = 1;
-		ABT_cond_broadcast(cpr->cpr_cond);
+		DABT_COND_BROADCAST(cpr->cpr_cond);
 		ABT_mutex_unlock(cpr->cpr_mutex);
 
 		/* Cleanup all pending records belong to this pool. */
@@ -455,7 +456,7 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 		ABT_rwlock_unlock(ins->ci_abt_lock);
 
 		/* Wait for related pool ULT to exit. */
-		ABT_thread_free(&cpr->cpr_thread);
+		DABT_THREAD_FREE(&cpr->cpr_thread);
 	} else {
 		ABT_mutex_unlock(cpr->cpr_mutex);
 	}
@@ -1048,7 +1049,7 @@ chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr)
 			 * and will release the pending record after using it.
 			 */
 			cpr->cpr_exiting = 1;
-			ABT_cond_broadcast(cpr->cpr_cond);
+			DABT_COND_BROADCAST(cpr->cpr_cond);
 			ABT_mutex_unlock(cpr->cpr_mutex);
 		} else {
 			ABT_mutex_unlock(cpr->cpr_mutex);
@@ -1291,7 +1292,7 @@ chk_ins_init(struct chk_instance **p_ins)
 	D_GOTO(out_init, rc = 0);
 
 out_mutex:
-	ABT_mutex_free(&ins->ci_abt_mutex);
+	DABT_MUTEX_FREE(&ins->ci_abt_mutex);
 out_lock:
 	ABT_rwlock_free(&ins->ci_abt_lock);
 out_init:
@@ -1335,13 +1336,13 @@ chk_ins_fini(struct chk_instance **p_ins)
 	D_ASSERT(ins->ci_dead_rank_ult == ABT_THREAD_NULL);
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
-		ABT_thread_free(&ins->ci_sched);
+		DABT_THREAD_FREE(&ins->ci_sched);
 
 	if (ins->ci_abt_cond != ABT_COND_NULL)
 		ABT_cond_free(&ins->ci_abt_cond);
 
 	if (ins->ci_abt_mutex != ABT_MUTEX_NULL)
-		ABT_mutex_free(&ins->ci_abt_mutex);
+		DABT_MUTEX_FREE(&ins->ci_abt_mutex);
 
 	if (ins->ci_abt_lock != ABT_RWLOCK_NULL)
 		ABT_rwlock_free(&ins->ci_abt_lock);

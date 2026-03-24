@@ -16,6 +16,7 @@
 #include <daos/pool_map.h>
 #include "rpc.h"
 #include "srv_internal.h"
+#include <daos_srv/dabt.h>
 
 /* Build a rank list of targets with certain status. */
 int
@@ -202,8 +203,8 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->bci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
-			 sizeof(cb_info->bci_rc));
+	DABT_EVENTUAL_SET(*eventual, (void *)&cb_info->bci_rc,
+			  sizeof(cb_info->bci_rc));
 	return 0;
 }
 
@@ -264,7 +265,7 @@ ds_pool_transfer_map_buf(struct ds_pool_map_bc *map_bc, crt_rpc_t *rpc, crt_bulk
 	rc = *status;
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out:
 	return rc;
 }

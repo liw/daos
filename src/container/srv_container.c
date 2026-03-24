@@ -27,6 +27,7 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+#include <daos_srv/dabt.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 
@@ -151,7 +152,7 @@ err_uuids:
 err_root:
 	rdb_path_fini(&svc->cs_root);
 err_mutex:
-	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
+	DABT_MUTEX_FREE(&svc->cs_cont_ephs_mutex);
 err_rwlock:
 	ABT_rwlock_free(&svc->cs_lock);
 err:
@@ -166,7 +167,7 @@ cont_svc_fini(struct cont_svc *svc)
 	rdb_path_fini(&svc->cs_uuids);
 	rdb_path_fini(&svc->cs_root);
 	ABT_rwlock_free(&svc->cs_lock);
-	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
+	DABT_MUTEX_FREE(&svc->cs_cont_ephs_mutex);
 }
 
 int

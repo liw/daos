@@ -28,6 +28,7 @@
 #include <daos/tls.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
+#include <daos_srv/dabt.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 
@@ -466,7 +467,7 @@ server_init_state_init(void)
 		return dss_abterr2der(rc);
 	rc = ABT_cond_create(&server_init_state_cv);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&server_init_state_mutex);
+		DABT_MUTEX_FREE(&server_init_state_mutex);
 		return dss_abterr2der(rc);
 	}
 	return 0;
@@ -477,7 +478,7 @@ server_init_state_fini(void)
 {
 	server_init_state = DSS_INIT_STATE_INIT;
 	ABT_cond_free(&server_init_state_cv);
-	ABT_mutex_free(&server_init_state_mutex);
+	DABT_MUTEX_FREE(&server_init_state_mutex);
 }
 
 static void
@@ -486,7 +487,7 @@ server_init_state_wait(enum dss_init_state state)
 	D_INFO("waiting for server init state %d\n", state);
 	ABT_mutex_lock(server_init_state_mutex);
 	while (server_init_state != state)
-		ABT_cond_wait(server_init_state_cv, server_init_state_mutex);
+		DABT_COND_WAIT(server_init_state_cv, server_init_state_mutex);
 	ABT_mutex_unlock(server_init_state_mutex);
 }
 
@@ -496,7 +497,7 @@ dss_init_state_set(enum dss_init_state state)
 	D_INFO("setting server init state to %d\n", state);
 	ABT_mutex_lock(server_init_state_mutex);
 	server_init_state = state;
-	ABT_cond_broadcast(server_init_state_cv);
+	DABT_COND_BROADCAST(server_init_state_cv);
 	ABT_mutex_unlock(server_init_state_mutex);
 }
 

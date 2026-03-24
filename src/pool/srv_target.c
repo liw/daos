@@ -42,6 +42,7 @@
 #include <daos_srv/srv_csum.h>
 #include "rpc.h"
 #include "srv_internal.h"
+#include <daos_srv/dabt.h>
 
 /* ds_pool_child **************************************************************/
 
@@ -133,8 +134,8 @@ ds_pool_child_put(struct ds_pool_child *child)
 	D_ASSERTF(child->spc_ref > 0, "%d\n", child->spc_ref);
 	child->spc_ref--;
 	if (child->spc_ref == 0 && *child->spc_state == POOL_CHILD_STOPPING)
-		ABT_eventual_set(child->spc_ref_eventual, (void *)&child->spc_ref,
-				 sizeof(child->spc_ref));
+		DABT_EVENTUAL_SET(child->spc_ref_eventual, (void *)&child->spc_ref,
+				  sizeof(child->spc_ref));
 }
 
 static int
@@ -309,7 +310,7 @@ pool_child_free(struct ds_pool_child *child)
 	/* Remove from cache */
 	d_list_del_init(&child->spc_list);
 	dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
-	ABT_eventual_free(&child->spc_ref_eventual);
+	DABT_EVENTUAL_FREE(&child->spc_ref_eventual);
 	D_FREE(child);
 }
 
@@ -508,8 +509,8 @@ ds_pool_apply_flags(struct ds_pool_flags_arg *args)
 		D_ERROR("failed to create apply_pool_flags ULT: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
+	DABT_THREAD_JOIN(thread);
+	DABT_THREAD_FREE(&thread);
 	return 0;
 }
 
@@ -963,7 +964,7 @@ err_recov_lock:
 err_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 err_mutex:
-	ABT_mutex_free(&pool->sp_mutex);
+	DABT_MUTEX_FREE(&pool->sp_mutex);
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_states:
@@ -1004,7 +1005,7 @@ pool_free_ref(struct daos_llink *llink)
 		ds_pool_put_map_bc(pool->sp_map_bc);
 	ABT_rwlock_free(&pool->sp_recov_lock);
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
-	ABT_mutex_free(&pool->sp_mutex);
+	DABT_MUTEX_FREE(&pool->sp_mutex);
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE(pool->sp_states);
 	D_FREE(pool);
@@ -1163,7 +1164,7 @@ eph_report_ult(void *data)
 	ABT_mutex_lock(pool->sp_mutex);
 	if (pool->sp_map == NULL) {
 		D_INFO(DF_UUID ": Wait for pool map.\n", DP_UUID(pool->sp_uuid));
-		ABT_cond_wait(pool->sp_fetch_hdls_cond, pool->sp_mutex);
+		DABT_COND_WAIT(pool->sp_fetch_hdls_cond, pool->sp_mutex);
 		D_INFO(DF_UUID ": Wait for pool map done.\n", DP_UUID(pool->sp_uuid));
 	}
 	ABT_mutex_unlock(pool->sp_mutex);
@@ -1260,7 +1261,7 @@ stop_eph_report_ult(struct ds_pool *pool)
 
 	D_INFO(DF_UUID ": Stopping eph report ULT.\n", DP_UUID(pool->sp_uuid));
 	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_signal(pool->sp_fetch_hdls_cond);
+	DABT_COND_SIGNAL(pool->sp_fetch_hdls_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	sched_req_wait(pool->sp_ec_ephs_req, true);
@@ -2831,7 +2832,7 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->bci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc, sizeof(cb_info->bci_rc));
+	DABT_EVENTUAL_SET(*eventual, (void *)&cb_info->bci_rc, sizeof(cb_info->bci_rc));
 	return 0;
 }
 
@@ -2891,7 +2892,7 @@ ds_pool_tgt_warmup_handler(crt_rpc_t *rpc)
 		rc = *status;
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out:
 	if (bulk_local != NULL)
 		crt_bulk_free(bulk_local);
@@ -3036,11 +3037,9 @@ static int
 recov_cont_bulk_cp(const struct crt_bulk_cb_info *cb_info)
 {
 	struct recov_cont_bulk_args *rcba = cb_info->bci_arg;
-	int                          rc;
 
 	rcba->rcba_result = cb_info->bci_rc;
-	rc                = ABT_eventual_set(rcba->rcba_eventual, NULL, 0);
-	D_ASSERTF(rc == ABT_SUCCESS, "Failed to ABT_eventual_set: %d\n", rc);
+	DABT_EVENTUAL_SET(rcba->rcba_eventual, NULL, 0);
 
 	return 0;
 }
@@ -3149,7 +3148,7 @@ out:
 	if (pool != NULL)
 		ds_pool_put(pool);
 	if (rcba.rcba_eventual != ABT_EVENTUAL_NULL)
-		ABT_eventual_free(&rcba.rcba_eventual);
+		DABT_EVENTUAL_FREE(&rcba.rcba_eventual);
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
 	D_FREE(prca.prca_conts);

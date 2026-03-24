@@ -7,6 +7,7 @@
 #define D_LOGFAC	DD_FAC(bio)
 
 #include "bio_wal.h"
+#include <daos_srv/dabt.h>
 
 #define WAL_HDR_MAGIC		(0xc01d2019)
 
@@ -259,9 +260,9 @@ wakeup_reserve_waiters(struct wal_super_info *si, bool wakeup_all)
 	if (reserve_allowed(si) || wakeup_all) {
 		ABT_mutex_lock(si->si_mutex);
 		if (wakeup_all)
-			ABT_cond_broadcast(si->si_rsrv_wq);
+			DABT_COND_BROADCAST(si->si_rsrv_wq);
 		else
-			ABT_cond_signal(si->si_rsrv_wq);
+			DABT_COND_SIGNAL(si->si_rsrv_wq);
 		ABT_mutex_unlock(si->si_mutex);
 	}
 }
@@ -281,7 +282,7 @@ bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id, struct bio_wal_sta
 		stats->ws_waiters = si->si_rsrv_waiters;
 
 	ABT_mutex_lock(si->si_mutex);
-	ABT_cond_wait(si->si_rsrv_wq, si->si_mutex);
+	DABT_COND_WAIT(si->si_rsrv_wq, si->si_mutex);
 	ABT_mutex_unlock(si->si_mutex);
 
 	D_ASSERT(si->si_rsrv_waiters > 0);
@@ -752,7 +753,7 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 
 	/* The ABT_eventual could be NULL if WAL I/O IOD failed on DMA mapping in bio_iod_prep() */
 	if (biod_tx->bd_dma_done != ABT_EVENTUAL_NULL)
-		ABT_eventual_set(biod_tx->bd_dma_done, NULL, 0);
+		DABT_EVENTUAL_SET(biod_tx->bd_dma_done, NULL, 0);
 
 	/*
 	 * To ensure the UNDO (for failed transactions) is performed before starting new
@@ -2019,7 +2020,7 @@ wal_close(struct bio_meta_context *mc)
 	if (rc)
 		D_ERROR("Flush WAL header failed. "DF_RC"\n", DP_RC(rc));
 
-	ABT_mutex_free(&si->si_mutex);
+	DABT_MUTEX_FREE(&si->si_mutex);
 	ABT_cond_free(&si->si_rsrv_wq);
 }
 
@@ -2056,7 +2057,7 @@ wal_open(struct bio_meta_context *mc)
 
 	rc = ABT_cond_create(&si->si_rsrv_wq);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&si->si_mutex);
+		DABT_MUTEX_FREE(&si->si_mutex);
 		return -DER_NOMEM;
 	}
 

@@ -10,6 +10,7 @@
 #define D_LOGFAC	DD_FAC(container)
 
 #include <abt.h>
+#include <daos_srv/dabt.h>
 #include <daos_errno.h>
 #include <cart/iv.h>
 #include <daos/common.h>
@@ -280,7 +281,7 @@ oid_iv_ent_destroy(d_sg_list_t *sgl)
 	struct oid_iv_entry *entry;
 
 	entry = sgl->sg_iovs[0].iov_buf;
-	ABT_mutex_free(&entry->lock);
+	DABT_MUTEX_FREE(&entry->lock);
 	d_sgl_fini(sgl, true);
 
 	return 0;

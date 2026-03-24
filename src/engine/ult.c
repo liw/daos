@@ -10,6 +10,7 @@
 #include <abt.h>
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/dabt.h>
 #include <daos_errno.h>
 #include "srv_internal.h"
 
@@ -555,7 +556,7 @@ ult_execute_cb(void *data)
 	arg->dfa_status = rc;
 
 	if (!arg->dfa_async) {
-		ABT_future_set(arg->dfa_future, (void *)(intptr_t)rc);
+		DABT_FUTURE_SET(arg->dfa_future, (void *)(intptr_t)rc);
 	} else {
 		arg->dfa_comp_cb(arg->dfa_comp_arg);
 		D_FREE(arg);
@@ -762,7 +763,7 @@ dss_chore_register(struct dss_chore *chore)
 	queue->chq_credits -= chore->cho_credits;
 	chore->cho_hint = queue;
 	d_list_add_tail(&chore->cho_link, &queue->chq_list);
-	ABT_cond_broadcast(queue->chq_cond);
+	DABT_COND_BROADCAST(queue->chq_cond);
 	ABT_mutex_unlock(queue->chq_mutex);
 
 	D_DEBUG(DB_TRACE, "register chore %p on queue %p: tgt=%d -> xs=%d dx.tgt=%d, credits %u\n",
@@ -889,7 +890,7 @@ dss_chore_queue_init(struct dss_xstream *dx)
 	rc = ABT_cond_create(&queue->chq_cond);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("failed to create chore queue condition variable: %d\n", rc);
-		ABT_mutex_free(&queue->chq_mutex);
+		DABT_MUTEX_FREE(&queue->chq_mutex);
 		return dss_abterr2der(rc);
 	}
 
@@ -919,9 +920,9 @@ dss_chore_queue_stop(struct dss_xstream *dx)
 
 	ABT_mutex_lock(queue->chq_mutex);
 	queue->chq_stop = true;
-	ABT_cond_broadcast(queue->chq_cond);
+	DABT_COND_BROADCAST(queue->chq_cond);
 	ABT_mutex_unlock(queue->chq_mutex);
-	ABT_thread_free(&queue->chq_ult);
+	DABT_THREAD_FREE(&queue->chq_ult);
 }
 
 void
@@ -930,7 +931,7 @@ dss_chore_queue_fini(struct dss_xstream *dx)
 	struct dss_chore_queue *queue = &dx->dx_chore_queue;
 
 	ABT_cond_free(&queue->chq_cond);
-	ABT_mutex_free(&queue->chq_mutex);
+	DABT_MUTEX_FREE(&queue->chq_mutex);
 }
 
 struct dss_vos_pool_create_args {

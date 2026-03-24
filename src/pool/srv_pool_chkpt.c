@@ -11,6 +11,7 @@
 #include <daos/pool.h>
 #include <daos_prop.h>
 #include "srv_internal.h"
+#include <daos_srv/dabt.h>
 
 struct chkpt_ctx {
 	struct dss_module_info *cc_dmi;
@@ -61,7 +62,7 @@ static void
 wake_fn(struct chkpt_ctx *ctx)
 {
 	ctx->cc_waiting = 0;
-	ABT_eventual_set(ctx->cc_eventual, NULL, 0);
+	DABT_EVENTUAL_SET(ctx->cc_eventual, NULL, 0);
 }
 
 static void
@@ -223,7 +224,7 @@ chkpt_ult(void *arg)
 		start = 0;
 	}
 	vos_pool_checkpoint_fini(poh);
-	ABT_eventual_free(&ctx.cc_eventual);
+	DABT_EVENTUAL_FREE(&ctx.cc_eventual);
 }
 
 int

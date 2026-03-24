@@ -16,6 +16,7 @@
 
 #include <raft.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/dabt.h>
 #include "rdb_internal.h"
 
 static int
@@ -382,7 +383,7 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	}
 	/* Move this RPC to db->d_replies for rdb_recvd(). */
 	d_list_move_tail(&rrpc->drc_entry, &db->d_replies);
-	ABT_cond_broadcast(db->d_replies_cv);
+	DABT_COND_BROADCAST(db->d_replies_cv);
 	ABT_mutex_unlock(db->d_mutex);
 }
 

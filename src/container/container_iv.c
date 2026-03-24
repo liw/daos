@@ -14,6 +14,7 @@
 #include "srv_internal.h"
 #include "rpc.h"
 #include <daos_srv/iv.h>
+#include <daos_srv/dabt.h>
 #include <daos/btree_class.h>
 #include <daos/btree.h>
 #include <daos/dtx.h>
@@ -1044,7 +1045,7 @@ out:
 	if (pool != NULL)
 		ds_pool_put(pool);
 
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	DABT_EVENTUAL_SET(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 static int
@@ -1108,7 +1109,7 @@ invalidate_retry:
 		 */
 		if (!invalidate_current) {
 			invalidate_current = true;
-			ABT_eventual_free(&eventual);
+			DABT_EVENTUAL_FREE(&eventual);
 			D_DEBUG(DB_TRACE, DF_UUID" invalidate_current and retry\n",
 				DP_UUID(cont_hdl_uuid));
 			goto invalidate_retry;
@@ -1117,7 +1118,7 @@ invalidate_retry:
 	}
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 
@@ -1612,7 +1613,7 @@ out:
 	D_FREE(iv_entry);
 	if (prop_fetch != NULL)
 		daos_prop_free(prop_fetch);
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	DABT_EVENTUAL_SET(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 int
@@ -1648,7 +1649,7 @@ cont_iv_prop_fetch(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *cont_prop)
 		D_GOTO(out, rc = *status);
 
 out:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 
@@ -1669,7 +1670,7 @@ cont_iv_snapshot_fetch_ult(void *data)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = cont_iv_snapshots_fetch(arg->ns, arg->cont_uuid, arg->snapshots,
 				     &arg->snapshot_cnt);
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	DABT_EVENTUAL_SET(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 int
@@ -1708,7 +1709,7 @@ cont_iv_snapshot_fetch_non_sys(struct ds_iv_ns *ns, uuid_t cont_uuid,
 	if (snapshot_cnt)
 		*snapshot_cnt = arg.snapshot_cnt;
 out:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 

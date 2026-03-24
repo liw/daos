@@ -33,6 +33,7 @@
 #include <daos_srv/iv.h>
 #include <daos_srv/srv_obj_ec.h>
 #include <daos_srv/security.h>
+#include <daos_srv/dabt.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include <daos/cont_props.h>
@@ -134,7 +135,7 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	D_ASSERT(cont != NULL);
 	while (cont->sc_csummer_initing) {
 		ABT_mutex_lock(cont->sc_mutex);
-		ABT_cond_wait(cont->sc_init_cond, cont->sc_mutex);
+		DABT_COND_WAIT(cont->sc_init_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
 	}
 
@@ -185,7 +186,7 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 done:
 	if (cont->sc_csummer_initing) {
 		cont->sc_csummer_initing = 0;
-		ABT_cond_broadcast(cont->sc_init_cond);
+		DABT_COND_BROADCAST(cont->sc_init_cond);
 	}
 	return rc;
 }
@@ -675,9 +676,9 @@ cont_child_fini_abt(struct ds_cont_child *cont)
 	if (cont->sc_fini_cond)
 		ABT_cond_free(&cont->sc_fini_cond);
 	if (cont->sc_mutex)
-		ABT_mutex_free(&cont->sc_mutex);
+		DABT_MUTEX_FREE(&cont->sc_mutex);
 	if (cont->sc_open_mutex)
-		ABT_mutex_free(&cont->sc_open_mutex);
+		DABT_MUTEX_FREE(&cont->sc_open_mutex);
 }
 
 static int
@@ -836,7 +837,7 @@ cont_child_wait(struct daos_llink *llink)
 	struct ds_cont_child *cont = cont_child_obj(llink);
 
 	ABT_mutex_lock(cont->sc_mutex);
-	ABT_cond_wait(cont->sc_fini_cond, cont->sc_mutex);
+	DABT_COND_WAIT(cont->sc_fini_cond, cont->sc_mutex);
 	ABT_mutex_unlock(cont->sc_mutex);
 }
 
@@ -845,7 +846,7 @@ cont_child_wakeup(struct daos_llink *llink)
 {
 	struct ds_cont_child *cont = cont_child_obj(llink);
 
-	ABT_cond_broadcast(cont->sc_fini_cond);
+	DABT_COND_BROADCAST(cont->sc_fini_cond);
 }
 
 static struct daos_llink_ops cont_child_cache_ops = {
@@ -1376,21 +1377,21 @@ cont_child_destroy_one(void *vin)
 
 	ABT_mutex_lock(cont->sc_mutex);
 	if (cont->sc_dtx_resyncing)
-		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
+		DABT_COND_WAIT(cont->sc_dtx_resync_cond, cont->sc_mutex);
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	/* Make sure checksum scrubbing has stopped */
 	ABT_mutex_lock(cont->sc_mutex);
 	if (cont->sc_scrubbing) {
 		sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
-		ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
+		DABT_COND_WAIT(cont->sc_scrub_cond, cont->sc_mutex);
 	}
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	/* Make sure rebuild has stopped */
 	ABT_mutex_lock(cont->sc_mutex);
 	if (cont->sc_rebuilding)
-		ABT_cond_wait(cont->sc_rebuild_cond, cont->sc_mutex);
+		DABT_COND_WAIT(cont->sc_rebuild_cond, cont->sc_mutex);
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	/* nobody should see it again after eviction */

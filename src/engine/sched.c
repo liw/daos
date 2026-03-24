@@ -12,6 +12,7 @@
 #include <daos/common.h>
 #include <daos_errno.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/dabt.h>
 #include <gurt/telemetry_producer.h>
 #include "srv_internal.h"
 
@@ -1714,7 +1715,7 @@ cond_wait(ABT_cond cond, ABT_mutex mutex, bool for_business)
 	struct sched_info	*info = &dx->dx_sched_info;
 
 	info->si_wait_cnt += 1;
-	ABT_cond_wait(cond, mutex);
+	DABT_COND_WAIT(cond, mutex);
 	D_ASSERT(info->si_wait_cnt > 0);
 	info->si_wait_cnt -= 1;
 	if (for_business)

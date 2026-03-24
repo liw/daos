@@ -15,6 +15,7 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+#include <daos_srv/dabt.h>
 
 struct snap_list_iter_args {
 	int		 sla_index;
@@ -539,7 +540,7 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->bci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
+	DABT_EVENTUAL_SET(*eventual, (void *)&cb_info->bci_rc,
 			 sizeof(cb_info->bci_rc));
 	return 0;
 }
@@ -625,7 +626,7 @@ xfer_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *con
 out_bulk:
 		crt_bulk_free(bulk_desc.bd_local_hdl);
 out_eventual:
-		ABT_eventual_free(&eventual);
+		DABT_EVENTUAL_FREE(&eventual);
 	}
 
 out_mem:

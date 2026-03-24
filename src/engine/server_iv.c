@@ -14,6 +14,7 @@
 #include <gurt/list.h>
 #include <cart/iv.h>
 #include <daos_srv/iv.h>
+#include <daos_srv/dabt.h>
 #include <daos_prop.h>
 #include "srv_internal.h"
 
@@ -182,7 +183,7 @@ ds_iv_ns_put(struct ds_iv_ns *ns)
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 	if (ns->iv_refcount == 1)
-		ABT_cond_broadcast(ns->iv_done_cond);
+		DABT_COND_BROADCAST(ns->iv_done_cond);
 	else if (ns->iv_refcount == 0)
 		ds_iv_ns_destroy(ns);
 }
@@ -740,7 +741,7 @@ iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 	D_ASSERT(d_list_empty(&ns->iv_entry_list));
 	d_list_del(&ns->iv_ns_link);
 	ABT_cond_free(&ns->iv_done_cond);
-	ABT_mutex_free(&ns->iv_mutex);
+	DABT_MUTEX_FREE(&ns->iv_mutex);
 	D_FREE(ns);
 }
 
@@ -790,7 +791,7 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 	}
 	rc = ABT_cond_create(&ns->iv_done_cond);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&ns->iv_mutex);
+		DABT_MUTEX_FREE(&ns->iv_mutex);
 		D_FREE(ns);
 		return dss_abterr2der(rc);
 	}
@@ -1036,7 +1037,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 				iv_value->sg_iovs[0].iov_len);
 	}
 
-	ABT_future_set(cb_info->future, NULL);
+	DABT_FUTURE_SET(cb_info->future, NULL);
 	return ret;
 }
 

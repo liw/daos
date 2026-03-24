@@ -12,6 +12,7 @@
 #include <daos/common.h>
 #include <gurt/common.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/dabt.h>
 
 static unsigned long   abt_cntr;
 static int             abt_ults;
@@ -85,7 +86,7 @@ abt_thread_1(void *arg)
 
 	abt_ults--;
 	if (abt_waiting) {
-		ABT_cond_broadcast(abt_cond);
+		DABT_COND_BROADCAST(abt_cond);
 		abt_waiting = false;
 	}
 	ABT_mutex_unlock(abt_lock);
@@ -120,14 +121,14 @@ abt_ult_create_rate(void)
 			}
 
 			abt_waiting = true;
-			ABT_cond_wait(abt_cond, abt_lock);
+			DABT_COND_WAIT(abt_cond, abt_lock);
 			ABT_mutex_unlock(abt_lock);
 			continue;
 		}
 
 		if (abt_ults >= opt_concur) {
 			abt_waiting = true;
-			ABT_cond_wait(abt_cond, abt_lock);
+			DABT_COND_WAIT(abt_cond, abt_lock);
 			ABT_mutex_unlock(abt_lock);
 			continue;
 		}
@@ -255,7 +256,7 @@ abt_lock_create_rate(void *arg)
 		case CR_MUTEX:
 			rc = ABT_mutex_create(&mutex);
 			assert(rc == ABT_SUCCESS);
-			ABT_mutex_free(&mutex);
+			DABT_MUTEX_FREE(&mutex);
 			break;
 
 		case CR_RWLOCK:
@@ -273,7 +274,7 @@ abt_lock_create_rate(void *arg)
 		case CR_EVENTUAL:
 			rc = ABT_eventual_create(sizeof(int), &eventual);
 			assert(rc == ABT_SUCCESS);
-			ABT_eventual_free(&eventual);
+			DABT_EVENTUAL_FREE(&eventual);
 			break;
 		}
 		abt_cntr++;
@@ -282,7 +283,7 @@ abt_lock_create_rate(void *arg)
 
 	ABT_mutex_lock(abt_lock);
 	if (abt_waiting) {
-		ABT_cond_broadcast(abt_cond);
+		DABT_COND_BROADCAST(abt_cond);
 		abt_waiting = false;
 	}
 	ABT_mutex_unlock(abt_lock);
@@ -443,14 +444,14 @@ main(int argc, char **argv)
 
 	ABT_mutex_lock(abt_lock);
 	if (abt_waiting)
-		ABT_cond_wait(abt_cond, abt_lock);
+		DABT_COND_WAIT(abt_cond, abt_lock);
 	ABT_mutex_unlock(abt_lock);
 out:
 	abt_reset();
 	if (abt_attr != ABT_THREAD_ATTR_NULL)
 		ABT_thread_attr_free(&abt_attr);
 
-	ABT_mutex_free(&abt_lock);
+	DABT_MUTEX_FREE(&abt_lock);
 	ABT_cond_free(&abt_cond);
 	ABT_finalize();
 	daos_debug_fini();

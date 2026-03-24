@@ -13,6 +13,7 @@
 #include <spdk/nvme_intel.h>
 #include <spdk/util.h>
 #include "bio_internal.h"
+#include <daos_srv/dabt.h>
 #include <daos_srv/smd.h>
 
 /* Used to preallocate buffer to query error log pages from SPDK health info */
@@ -83,7 +84,7 @@ bio_get_dev_state_internal(void *msg_arg)
 	dsm->devstate.meta_wal_size = default_wal_sz(dsm->meta_size);
 	dsm->devstate.rdb_wal_size = default_wal_sz(dsm->rdb_size);
 
-	ABT_eventual_set(dsm->eventual, NULL, 0);
+	DABT_EVENTUAL_SET(dsm->eventual, NULL, 0);
 }
 
 static void
@@ -105,7 +106,7 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	if (rc)
 		D_ERROR("State transition failed, rc=%d\n", rc);
 
-	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
+	DABT_EVENTUAL_SET(dsm->eventual, &rc, sizeof(rc));
 }
 
 static void

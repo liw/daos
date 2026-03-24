@@ -17,6 +17,7 @@
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/iv.h>
+#include <daos_srv/dabt.h>
 
 #include "chk.pb-c.h"
 #include "chk_internal.h"
@@ -2216,7 +2217,7 @@ again:
 		goto handle;
 	}
 
-	ABT_cond_wait(ins->ci_abt_cond, ins->ci_abt_mutex);
+	DABT_COND_WAIT(ins->ci_abt_cond, ins->ci_abt_mutex);
 
 	goto again;
 
@@ -2884,7 +2885,7 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
-		ABT_thread_free(&ins->ci_sched);
+		DABT_THREAD_FREE(&ins->ci_sched);
 
 	chk_iv_ns_destroy(ins);
 	uma.uma_id = UMEM_CLASS_VMEM;
@@ -2988,7 +2989,7 @@ remote:
 
 	ABT_mutex_lock(ins->ci_abt_mutex);
 	ins->ci_started = 1;
-	ABT_cond_broadcast(ins->ci_abt_cond);
+	DABT_COND_BROADCAST(ins->ci_abt_cond);
 	ABT_mutex_unlock(ins->ci_abt_mutex);
 
 	ins->ci_starting = 0;
@@ -3480,7 +3481,7 @@ chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act)
 		 * action from the report options. Otherwise, related inconsistency will be ignored.
 		 */
 		pending->cpr_action = act;
-		ABT_cond_broadcast(pending->cpr_cond);
+		DABT_COND_BROADCAST(pending->cpr_cond);
 		ABT_mutex_unlock(pending->cpr_mutex);
 		chk_pending_del(ins, seq, &pending);
 	} else {
@@ -3704,7 +3705,7 @@ again:
 		goto out;
 	}
 
-	ABT_cond_wait(cpr->cpr_cond, cpr->cpr_mutex);
+	DABT_COND_WAIT(cpr->cpr_cond, cpr->cpr_mutex);
 
 	goto again;
 
@@ -4050,7 +4051,7 @@ chk_leader_cleanup(void)
 	D_ASSERT(d_list_empty(&ins->ci_rank_list));
 
 	if (ins->ci_dead_rank_ult != ABT_THREAD_NULL)
-		ABT_thread_free(&ins->ci_dead_rank_ult);
+		DABT_THREAD_FREE(&ins->ci_dead_rank_ult);
 }
 
 int

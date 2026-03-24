@@ -8,6 +8,7 @@
 
 #include <spdk/thread.h>
 #include "bio_internal.h"
+#include <daos_srv/dabt.h>
 #include "bio_wal.h"
 
 struct blob_cp_arg {
@@ -49,7 +50,7 @@ static inline void
 blob_cp_arg_fini(struct blob_cp_arg *ba)
 {
 	bio_io_lug_fini(&ba->bca_io_lug);
-	ABT_eventual_free(&ba->bca_eventual);
+	DABT_EVENTUAL_FREE(&ba->bca_eventual);
 }
 
 static void
@@ -86,7 +87,7 @@ blob_common_cb(struct blob_cp_arg *ba, int rc)
 	D_ASSERT(ba->bca_inflights > 0);
 	ba->bca_inflights--;
 	if (ba->bca_inflights == 0)
-		ABT_eventual_set(ba->bca_eventual, NULL, 0);
+		DABT_EVENTUAL_SET(ba->bca_eventual, NULL, 0);
 }
 
 /*

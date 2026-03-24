@@ -23,6 +23,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/daos_chk.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/dabt.h>
 
 #include "chk.pb-c.h"
 
@@ -1007,7 +1008,7 @@ chk_pending_destroy(struct chk_instance *ins, struct chk_pending_rec *cpr)
 			ABT_cond_free(&cpr->cpr_cond);
 
 		if (cpr->cpr_mutex != ABT_MUTEX_NULL)
-			ABT_mutex_free(&cpr->cpr_mutex);
+			DABT_MUTEX_FREE(&cpr->cpr_mutex);
 
 		D_FREE(cpr);
 	} else {
@@ -1082,7 +1083,7 @@ chk_pool_put(struct chk_pool_rec *cpr)
 		D_FREE(cpr->cpr_clues.pcs_array);
 
 		if (cpr->cpr_mutex != ABT_MUTEX_NULL)
-			ABT_mutex_free(&cpr->cpr_mutex);
+			DABT_MUTEX_FREE(&cpr->cpr_mutex);
 		if (cpr->cpr_cond != ABT_COND_NULL)
 			ABT_cond_free(&cpr->cpr_cond);
 
@@ -1228,9 +1229,9 @@ chk_stop_sched(struct chk_instance *ins)
 		       ins->ci_is_leader ? "leader" : "engine", dss_self_rank(), gen);
 
 		ins->ci_sched_exiting = 1;
-		ABT_cond_broadcast(ins->ci_abt_cond);
+		DABT_COND_BROADCAST(ins->ci_abt_cond);
 		ABT_mutex_unlock(ins->ci_abt_mutex);
-		ABT_thread_free(&ins->ci_sched);
+		DABT_THREAD_FREE(&ins->ci_sched);
 	} else {
 		ABT_mutex_unlock(ins->ci_abt_mutex);
 		/* Check ci_bk.cb_gen for the case of others restarted checker during my wait. */

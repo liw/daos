@@ -13,6 +13,7 @@
 #include <daos/pool.h>
 #include <daos_prop.h>
 #include "srv_internal.h"
+#include <daos_srv/dabt.h>
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 
@@ -98,7 +99,7 @@ cont_put_cb(void *cont)
 
 	ABT_mutex_lock(cont_child->sc_mutex);
 	cont_child->sc_scrubbing = 0;
-	ABT_cond_broadcast(cont_child->sc_scrub_cond);
+	DABT_COND_BROADCAST(cont_child->sc_scrub_cond);
 	ABT_mutex_unlock(cont_child->sc_mutex);
 
 	ds_cont_child_put(cont_child);
@@ -299,8 +300,8 @@ drain_pool_tgt_cb(struct ds_pool *pool)
 		return rc;
 	}
 
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
+	DABT_THREAD_JOIN(thread);
+	DABT_THREAD_FREE(&thread);
 
 	return 0;
 }

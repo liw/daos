@@ -9,6 +9,7 @@
 #include <spdk/blob.h>
 #include <spdk/thread.h>
 #include "bio_internal.h"
+#include <daos_srv/dabt.h>
 
 static void
 dma_free_chunk(struct bio_dma_chunk *chunk)
@@ -125,7 +126,7 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
 
 	D_ASSERT(buf->bdb_tot_cnt == 0);
-	ABT_mutex_free(&buf->bdb_mutex);
+	DABT_MUTEX_FREE(&buf->bdb_mutex);
 	ABT_cond_free(&buf->bdb_wait_iod);
 	ABT_cond_free(&buf->bdb_fifo);
 
@@ -218,14 +219,14 @@ dma_buffer_create(unsigned int init_cnt, int tgt_id)
 
 	rc = ABT_cond_create(&buf->bdb_wait_iod);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&buf->bdb_mutex);
+		DABT_MUTEX_FREE(&buf->bdb_mutex);
 		D_FREE(buf);
 		return NULL;
 	}
 
 	rc = ABT_cond_create(&buf->bdb_fifo);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&buf->bdb_mutex);
+		DABT_MUTEX_FREE(&buf->bdb_mutex);
 		ABT_cond_free(&buf->bdb_wait_iod);
 		D_FREE(buf);
 		return NULL;
@@ -233,7 +234,7 @@ dma_buffer_create(unsigned int init_cnt, int tgt_id)
 
 	rc = bulk_cache_create(buf);
 	if (rc != 0) {
-		ABT_mutex_free(&buf->bdb_mutex);
+		DABT_MUTEX_FREE(&buf->bdb_mutex);
 		ABT_cond_free(&buf->bdb_wait_iod);
 		ABT_cond_free(&buf->bdb_fifo);
 		D_FREE(buf);
@@ -297,7 +298,7 @@ iod_dma_completion(struct bio_desc *biod, int err)
 		D_ASSERT(biod->bd_comp_arg != NULL);
 		biod->bd_completion(biod->bd_comp_arg, err);
 	} else if (biod->bd_dma_done != ABT_EVENTUAL_NULL) {
-		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
+		DABT_EVENTUAL_SET(biod->bd_dma_done, NULL, 0);
 	}
 }
 
@@ -331,7 +332,7 @@ bio_iod_free(struct bio_desc *biod)
 	D_ASSERT(!biod->bd_buffer_prep);
 
 	if (biod->bd_dma_done != ABT_EVENTUAL_NULL)
-		ABT_eventual_free(&biod->bd_dma_done);
+		DABT_EVENTUAL_FREE(&biod->bd_dma_done);
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
@@ -1024,7 +1025,7 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 		d_tm_set_gauge(bdb->bdb_stats.bds_active_iods, bdb->bdb_active_iods);
 
 	ABT_mutex_lock(bdb->bdb_mutex);
-	ABT_cond_broadcast(bdb->bdb_wait_iod);
+	DABT_COND_BROADCAST(bdb->bdb_wait_iod);
 	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
@@ -1277,7 +1278,7 @@ iod_fifo_wait(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 
 	/* First waiter in the FIFO queue waits on 'bdb_wait_iod' */
 	ABT_mutex_lock(bdb->bdb_mutex);
-	ABT_cond_wait(bdb->bdb_wait_iod, bdb->bdb_mutex);
+	DABT_COND_WAIT(bdb->bdb_wait_iod, bdb->bdb_mutex);
 	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
@@ -1301,7 +1302,7 @@ iod_fifo_in(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 
 	/* Except the first waiter, all other waiters in FIFO queue wait on 'bdb_fifo' */
 	ABT_mutex_lock(bdb->bdb_mutex);
-	ABT_cond_wait(bdb->bdb_fifo, bdb->bdb_mutex);
+	DABT_COND_WAIT(bdb->bdb_fifo, bdb->bdb_mutex);
 	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
@@ -1321,7 +1322,7 @@ iod_fifo_out(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 	/* Wakeup next one in the FIFO queue */
 	if (bdb->bdb_queued_iods) {
 		ABT_mutex_lock(bdb->bdb_mutex);
-		ABT_cond_signal(bdb->bdb_fifo);
+		DABT_COND_SIGNAL(bdb->bdb_fifo);
 		ABT_mutex_unlock(bdb->bdb_mutex);
 	}
 }
