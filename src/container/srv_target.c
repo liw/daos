@@ -2555,6 +2555,22 @@ ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 	crt_opcode_t		opc = opc_get(rpc->cr_opc);
 	int			rc;
 
+	if (opc_get_rpc_ver(rpc->cr_opc) >= 9) {
+		struct cont_oid_alloc_v9_in *in9 = crt_req_get(rpc);
+
+		D_INFO("TEST: v9 opc=%x pool=" DF_UUID " pool_hdl=" DF_UUID " cont=" DF_UUID
+		       " cont_hdl=" DF_UUID " num_oids=" DF_U64 "\n",
+		       rpc->cr_opc, DP_UUID(in9->coai_op.ci_pool),
+		       DP_UUID(in9->coai_op.ci_pool_hdl), DP_UUID(in9->coai_op.ci_uuid),
+		       DP_UUID(in9->coai_op.ci_hdl), in9->num_oids);
+	} else {
+		D_INFO("TEST: v8 opc=%x pool_hdl=" DF_UUID " cont=" DF_UUID " cont_hdl=" DF_UUID
+		       "\n",
+		       rpc->cr_opc, DP_UUID(in->ci_pool_hdl), DP_UUID(in->ci_uuid),
+		       DP_UUID(in->ci_hdl));
+		D_ASSERTF(false, "opc=%x\n", rpc->cr_opc);
+	}
+
 	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);

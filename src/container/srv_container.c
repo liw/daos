@@ -6021,6 +6021,21 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	struct cont_svc			*svc;
 	int				 rc;
 
+	if (opc_get_rpc_ver(rpc->cr_opc) >= 9) {
+		struct cont_op_v9_in *in9 = crt_req_get(rpc);
+
+		D_INFO("TEST: v9 opc=%x pool=" DF_UUID " pool_hdl=" DF_UUID " cont=" DF_UUID
+		       " cont_hdl=" DF_UUID "\n",
+		       rpc->cr_opc, DP_UUID(in9->ci_pool), DP_UUID(in9->ci_pool_hdl),
+		       DP_UUID(in9->ci_uuid), DP_UUID(in9->ci_hdl));
+	} else {
+		D_INFO("TEST: v8 opc=%x pool_hdl=" DF_UUID " cont=" DF_UUID " cont_hdl=" DF_UUID
+		       "\n",
+		       rpc->cr_opc, DP_UUID(in->ci_pool_hdl), DP_UUID(in->ci_uuid),
+		       DP_UUID(in->ci_hdl));
+		D_ASSERTF(false, "opc=%x\n", rpc->cr_opc);
+	}
+
 	/*
 	 * Some mgmt RPCs may come from either client or server (admin/dRPC) calls. RPCs from
 	 * servers don't contain pool/cont handles.
