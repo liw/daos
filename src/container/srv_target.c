@@ -2555,9 +2555,12 @@ ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 	crt_opcode_t		opc = opc_get(rpc->cr_opc);
 	int			rc;
 
-	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	rc = ds_pool_hdl_lookup(opc_get_rpc_ver(rpc->cr_opc) >= CONT_PROTO_VER_WITH_POOL_UUID
+				    ? ((struct cont_op_v9_in *)in)->ci_pool
+				    : NULL,
+				in->ci_pool_hdl, &pool_hdl);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
