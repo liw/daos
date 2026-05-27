@@ -455,9 +455,14 @@ cont_destroy_complete(tse_task_t *task, void *data)
 {
 	struct cont_args           *arg    = (struct cont_args *)data;
 	struct dc_pool             *pool   = arg->pool;
+	struct cont_op_v8_in *in = crt_req_get(arg->rpc);
 	struct cont_destroy_v8_out *out    = crt_reply_get(arg->rpc);
+	uint32_t force;
+	const char *label = NULL;
 	bool                        reinit = false;
 	int                         rc     = task->dt_result;
+
+	cont_destroy_in_get_data(arg->rpc, &force, &label);
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cdo_op, task);
@@ -476,7 +481,7 @@ cont_destroy_complete(tse_task_t *task, void *data)
 
 	rc = out->cdo_op.co_rc;
 	if (rc != 0) {
-		D_ERROR("failed to destroy container: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT": failed to destroy %s", DP_CONT(pool->dp_pool, in->ci_uuid), label == NULL ? "container" : label);
 		D_GOTO(out, rc);
 	}
 
