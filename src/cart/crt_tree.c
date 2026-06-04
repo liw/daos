@@ -10,6 +10,9 @@
 #define D_LOGFAC	DD_FAC(grp)
 
 #include "crt_internal.h"
+#include <daos/common.h>
+
+int daos_fail_check(uint64_t id) __attribute__((weak));
 
 static int
 crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
@@ -187,6 +190,10 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	if (ver_match != NULL) {
 		*ver_match = (bool)(grp_ver == grp_priv->gp_membs_ver);
+
+		if (daos_fail_check &&
+		    DAOS_FAIL_CHECK(DAOS_CRT_GRP_VER_MISMATCH))
+			*ver_match = false;
 
 		if (*ver_match == false) {
 			D_DEBUG(DB_ALL,
