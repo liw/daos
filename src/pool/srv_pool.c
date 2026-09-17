@@ -8183,18 +8183,14 @@ out:
 static int
 pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list);
 
-/*
- * Prepare targets to for reintegration or extension. Return
- *   - 0 if successful,
- *   - 1 if no target needs to join, or
- *   - a negative error code.
- */
+/* Prepare targets to for reintegration or extension. */
 static int
 pool_join_pre(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opc,
 	      struct pool_target_addr_list *list)
 {
 	struct pool_target_addr_list valid_list = {0};
 	bool                         reint;
+	int                          i;
 	int                          rc;
 
 	D_ASSERT(opc == POOL_REINT || opc == POOL_EXTEND);
@@ -8204,10 +8200,19 @@ pool_join_pre(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opc,
 	if (rc != 0)
 		goto out;
 
-	if (valid_list.pta_number == 0) {
-		D_INFO(DF_UUID ": no valid target to join\n", DP_UUID(svc->ps_uuid));
-		rc = 1;
-		goto out_valid_list;
+	/* If any rank has been filtered out, return an error. */
+	for (i = 0; i < list->pta_number; i++) {
+		d_rank_t rank = list->pta_addrs[i].pta_rank;
+		int      j;
+
+		for (j = 0; j < valid_list.pta_number; j++)
+			if (valid_list.pta_addrs[j].pta_rank == rank)
+				break;
+		if (j == valid_list.pta_number) { /* not found */
+			D_ERROR(DF_UUID ": rank %u already joined\n", DP_UUID(svc->ps_uuid), rank);
+			rc = -DER_ALREADY;
+			goto out_valid_list;
+		}
 	}
 
 	rc = pool_recov_cont(ctx, svc, &valid_list);
@@ -8264,11 +8269,8 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 		goto out;
 
 	rc = pool_join_pre(rpc->cr_ctx, svc, opc_get(rpc->cr_opc), &tgt_addr_list);
-	if (rc != 0) {
-		if (rc == 1) /* already joined */
-			rc = 0;
+	if (rc != 0)
 		goto out_svc;
-	}
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				 false /* exclude_rank */, &rank_list, domains, ndomains, NULL,
@@ -8418,11 +8420,8 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT) {
 		rc = pool_join_pre(rpc->cr_ctx, svc, opc_get(rpc->cr_opc), &list);
-		if (rc != 0) {
-			if (rc == 1) /* already joined */
-				rc = 0;
+		if (rc != 0)
 			goto out_svc;
-		}
 		flags |= POOL_RESET_RECOV_CONT;
 	}
 
