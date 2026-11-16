@@ -1844,6 +1844,21 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 		if (rc == 0)
 			continue;
 
+		if (rc == -DER_CONT_DESTROYING) {
+			/*
+			 * The container is registered to the container service but is being
+			 * destroyed. It is not an orphan, and its label may have been removed
+			 * already. Leave it to the container destroyer.
+			 */
+			D_DEBUG(DB_MD,
+				DF_ENGINE " on rank %u skips container " DF_UUIDF "/" DF_UUIDF
+					  " that is being destroyed\n",
+				DP_ENGINE(ins), dss_self_rank(), DP_UUID(cpr->cpr_uuid),
+				DP_UUID(ccr->ccr_uuid));
+			ccr->ccr_skip = 1;
+			continue;
+		}
+
 		if (rc != -DER_NONEXIST) {
 			D_CDEBUG(failout, DLOG_ERR, DLOG_DBG,
 				 DF_ENGINE" on rank %u failed to check container "
